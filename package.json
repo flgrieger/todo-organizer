@@ -1,0 +1,16 @@
+{
+  "name": "todo-overview",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Dev toolbox for the single-file todo app. Not required to run the app.",
+  "scripts": {
+    "lint": "eslint . --quiet",
+    "typecheck": "tsc --noEmit --pretty false",
+    "test": "node --test",
+    "check": "npm run lint && npm run typecheck && npm run test"
+  },
+  "devDependencies": {
+    "eslint": "^9.0.0",
+    "typescript": "^5.4.0"
+  }
+}

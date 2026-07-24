@@ -1,0 +1,17 @@
+# Dependencies (dev-only toolbox; reinstall with `npm install`)
+node_modules/
+
+# macOS junk
+.DS_Store
+
+# Local agent / Claude tooling & settings (not part of the app)
+.agents/
+.claude/
+skills-lock.json
+
+# Scratch / working files
+temp/
+
+# Python bytecode cache (notes-helper)
+__pycache__/
+*.pyc

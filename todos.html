@@ -1,0 +1,1635 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Todo Overview</title>
+<style>
+  :root {
+    /* Wise-inspired palette. Bright green is a FILL, never text on white
+       (too light to read). Forest green is the ink + the "brand" text color. */
+    --bg: #f5f7f4;
+    --panel: #ffffff;
+    --ink: #163300;            /* forest green — headings & body text */
+    --ink-soft: #5a6b52;       /* muted green-grey */
+    --ink-faint: #93a08b;
+    --line: #e8ebe4;
+    --line-strong: #d7ddd0;
+    --accent: #9fe870;         /* Wise bright green — fills only */
+    --accent-hover: #8edb5c;
+    --accent-ink: #163300;     /* text/icon color that reads as "brand" */
+    --accent-soft: #eafada;    /* pale green tint for active/selected states */
+    --forest: #163300;
+    --green: #2f6b1e;          /* readable positive-green text */
+    --amber: #8a6a00;
+    --red: #b3261e;
+    --radius: 14px;
+    --radius-sm: 10px;
+    --shadow: 0 1px 2px rgba(22,51,0,.05), 0 10px 30px rgba(22,51,0,.07);
+    --ring: 0 0 0 3px rgba(159,232,112,.55);   /* soft green focus glow */
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  /* Mode is signalled by the toggle + a subtle background temperature shift —
+     the Wise green accent stays constant across Work and Private. */
+  body[data-mode="work"]    { --bg: #f2f6f5; }   /* cool */
+  body[data-mode="private"] { --bg: #f7f5f0; }   /* warm */
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    font-family: var(--sans);
+    background: var(--bg);
+    color: var(--ink);
+    font-size: 14px;
+    line-height: 1.45;
+    -webkit-font-smoothing: antialiased;
+  }
+  button { font-family: inherit; cursor: pointer; }
+  input, select, textarea { font-family: inherit; font-size: 14px; }
+  button:focus-visible, a:focus-visible { outline: 2px solid var(--forest); outline-offset: 2px; border-radius: 6px; }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+
+  .app { display: grid; grid-template-columns: 248px 1fr; height: 100vh; }
+
+  /* ---------- Sidebar ---------- */
+  .sidebar {
+    background: var(--panel);
+    border-right: 1px solid var(--line);
+    display: flex; flex-direction: column;
+    overflow-y: auto;
+    padding: 18px 12px 12px;
+  }
+  .brand { font-weight: 800; font-size: 16px; padding: 2px 8px 18px; letter-spacing: -.3px; color: var(--forest); }
+  .brand span { color: var(--accent-ink); }
+
+  .nav-group { margin-bottom: 18px; }
+  .nav-label {
+    font-size: 11px; text-transform: uppercase; letter-spacing: .06em;
+    color: var(--ink-faint); font-weight: 600; padding: 0 8px 6px;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .nav-label button {
+    border: none; background: none; color: var(--ink-faint); font-size: 15px;
+    line-height: 1; padding: 0 2px; border-radius: 4px;
+  }
+  .nav-label button:hover { color: var(--forest); background: var(--accent-soft); }
+
+  .nav-item {
+    display: flex; align-items: center; gap: 9px;
+    padding: 6px 8px; border-radius: 8px; color: var(--ink-soft);
+    border: none; background: none; width: 100%; text-align: left; font-size: 13.5px;
+  }
+  .nav-item:hover { background: #eef1ec; }
+  .nav-item.active { background: var(--accent-soft); color: var(--forest); font-weight: 600; }
+  .nav-item .ico { width: 16px; text-align: center; font-size: 14px; flex: none; }
+  .nav-item .count { margin-left: auto; font-size: 11.5px; color: var(--ink-faint); font-weight: 500; }
+  .nav-item.active .count { color: var(--forest); }
+  .nav-item .dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+  .last-changed { font-size: 11px; color: var(--ink-faint); padding: 8px 8px 0; }
+  .nav-item .area-move {
+    margin-left: auto; font-size: 13px; color: var(--ink-faint); padding: 0 4px;
+    opacity: 0; border-radius: 5px; transition: opacity .12s;
+  }
+  .nav-item:hover .area-move { opacity: 1; }
+  .nav-item .area-move:hover { color: var(--forest); background: var(--accent-soft); }
+  .nav-item .area-move + .count { margin-left: 4px; }
+  .nav-sub { padding-left: 8px; }
+
+  /* ---------- Main ---------- */
+  .main { display: flex; flex-direction: column; overflow: hidden; }
+  .topbar {
+    padding: 16px 28px; border-bottom: 1px solid var(--line);
+    display: flex; align-items: center; gap: 14px; background: var(--panel);
+  }
+  .topbar h1 { font-size: 18px; margin: 0; font-weight: 800; letter-spacing: -.4px; color: var(--forest); }
+  .topbar .sub { color: var(--ink-faint); font-size: 12.5px; margin-top: 1px; }
+  .topbar .spacer { flex: 1; }
+
+  /* Signature element: the Wise pill toggle. Active side is the iconic
+     bright-green fill with forest-green text. */
+  .mode-toggle {
+    display: inline-flex; background: #eef1ec;
+    border: 1px solid var(--line); border-radius: 999px; padding: 4px; gap: 2px;
+  }
+  .mode-toggle button {
+    border: none; background: none; border-radius: 999px; padding: 9px 20px;
+    font-size: 14.5px; font-weight: 700; color: var(--ink-soft);
+    display: flex; align-items: center; gap: 8px; letter-spacing: -.1px;
+    transition: background .15s, color .15s;
+  }
+  .mode-toggle button .ic { font-size: 15px; }
+  .mode-toggle button:hover { color: var(--forest); }
+  .mode-toggle button.active { background: var(--accent); color: var(--forest); box-shadow: 0 1px 2px rgba(22,51,0,.14); }
+  .mode-toggle button.active:hover { color: var(--forest); }
+  .mode-div { width: 1px; height: 34px; background: var(--line); margin: 0 6px; }
+
+  .toolbar {
+    padding: 12px 28px; display: flex; gap: 10px; align-items: center;
+    border-bottom: 1px solid var(--line); background: var(--panel);
+  }
+  .quickadd {
+    flex: 1; display: flex; align-items: center; gap: 8px;
+    background: var(--bg); border: 1px solid var(--line-strong);
+    border-radius: 12px; padding: 9px 13px;
+  }
+  .quickadd:focus-within { border-color: var(--forest); background: #fff; box-shadow: var(--ring); }
+  .quickadd input { flex: 1; border: none; background: none; outline: none; font-size: 14px; }
+  .quickadd .plus { color: var(--accent-ink); font-size: 17px; font-weight: 700; }
+
+  select.control, .btn {
+    border: 1px solid var(--line-strong); background: var(--panel); color: var(--ink-soft);
+    border-radius: var(--radius-sm); padding: 7px 11px; font-size: 13px;
+  }
+  select.control:hover, .btn:hover { border-color: var(--forest); color: var(--forest); }
+  .btn.ghost { border-color: transparent; }
+
+  /* ---------- Notes import banner ---------- */
+  .imp-banner {
+    margin: 12px 28px 0; padding: 14px 16px;
+    background: var(--accent-soft); border: 1px solid var(--accent);
+    border-radius: var(--radius); box-shadow: var(--shadow);
+  }
+  .imp-head { font-weight: 700; color: var(--forest); font-size: 14px; }
+  .imp-list { margin: 8px 0 12px; display: flex; flex-direction: column; gap: 3px; }
+  .imp-item { font-size: 13px; color: var(--ink); }
+  .imp-item .imp-src { color: var(--ink-faint); font-size: 12px; }
+  .imp-item.imp-more { color: var(--ink-faint); font-style: italic; }
+  .imp-actions { display: flex; gap: 10px; align-items: center; }
+
+  /* ---------- Cross-project attribute filter bar ---------- */
+  .filterbar { display:flex; align-items:center; gap:8px; flex-wrap:wrap;
+    padding:10px 28px; border-bottom:1px solid var(--line); background:var(--panel); }
+  .fb-label { font-size:11px; text-transform:uppercase; letter-spacing:.06em;
+    color:var(--ink-faint); font-weight:600; margin-right:2px; }
+  .fb-chip { display:inline-flex; align-items:center; gap:6px; border:1px solid var(--line-strong);
+    background:var(--panel); color:var(--ink-soft); border-radius:999px; padding:6px 12px;
+    font-size:13px; font-weight:500; }
+  .fb-chip:hover { border-color:var(--forest); color:var(--forest); }
+  .fb-chip.on { background:var(--accent-soft); border-color:var(--accent); color:var(--forest); font-weight:600; }
+  .fb-chip .fb-ic { font-size:12px; }
+  .fb-clear { border:none; background:none; color:var(--ink-faint); font-size:13px;
+    padding:6px 8px; margin-left:auto; border-radius:8px; }
+  .fb-clear:hover { color:var(--red); background:#fdeceb; }
+
+  .list-wrap { flex: 1; overflow-y: auto; padding: 8px 28px 60px; }
+
+  .group-head {
+    font-size: 12px; font-weight: 650; color: var(--ink-soft);
+    text-transform: uppercase; letter-spacing: .05em;
+    padding: 20px 4px 8px; display: flex; align-items: center; gap: 8px;
+  }
+  .group-head .g-count { color: var(--ink-faint); font-weight: 500; }
+  .group-sep { height: 1px; background: var(--line); margin: 6px 4px 0; }
+
+  /* ---------- Todo card ---------- */
+  .todo {
+    display: flex; align-items: flex-start; gap: 12px;
+    background: var(--panel); border: 1px solid var(--line);
+    border-radius: var(--radius); padding: 12px 14px; margin-bottom: 8px;
+    cursor: pointer; transition: border-color .12s, box-shadow .12s;
+  }
+  .todo:hover { border-color: var(--line-strong); box-shadow: var(--shadow); }
+  .todo.done { opacity: .55; }
+  .todo.done .t-title { text-decoration: line-through; color: var(--ink-faint); }
+
+  .check {
+    width: 20px; height: 20px; border-radius: 50%; border: 1.8px solid var(--line-strong);
+    flex: none; margin-top: 1px; background: none; display: flex; align-items: center; justify-content: center;
+    color: var(--forest); font-size: 12px; font-weight: 700; transition: background .12s, border-color .12s;
+  }
+  .check:hover { border-color: var(--forest); }
+  .todo.done .check { background: var(--accent); border-color: var(--accent); color: var(--forest); }
+
+  .t-body { flex: 1; min-width: 0; }
+  .t-title { font-size: 14.5px; font-weight: 500; display: flex; align-items: center; gap: 7px; }
+  .t-star { font-size: 13px; color: #c48f00; }
+  .t-meta { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 7px; align-items: center; }
+
+  .chip {
+    display: inline-flex; align-items: center; gap: 5px;
+    font-size: 11.5px; padding: 2px 8px; border-radius: 20px;
+    background: #f1f1ee; color: var(--ink-soft); font-weight: 500; white-space: nowrap;
+  }
+  .chip .dot { width: 7px; height: 7px; border-radius: 50%; }
+  .chip.due-over { background: #fdeceb; color: var(--red); }
+  .chip.due-soon { background: #fbf1d3; color: var(--amber); }
+  .chip.prio-3 { background: #fdeceb; color: var(--red); }
+  .chip.prio-2 { background: #fbf1d3; color: var(--amber); }
+  .chip.prio-1 { background: #eaf6df; color: var(--green); }
+  .chip.est { background: var(--accent-soft); color: var(--accent-ink); }
+  .chip.qw { background: #dbf6c6; color: #2c6414; font-weight: 600; }
+  .chip.lt { background: #e6f5e9; color: #2f7d4a; font-weight: 600; }
+
+  /* Chips you can click to edit right on the card */
+  .chip.editable { cursor: pointer; transition: filter .12s, border-color .12s, color .12s, background .12s; }
+  .chip.editable:hover { filter: brightness(.95); }
+  /* Location chip = a different level (where the task lives), so it looks distinct */
+  .chip.loc {
+    background: var(--panel); border: 1px solid var(--line-strong);
+    color: var(--ink); font-weight: 600;
+  }
+  .chip.loc.editable:hover { filter: none; border-color: var(--forest); color: var(--forest); }
+  /* Faint "add this attribute" placeholder chips */
+  .chip.add {
+    background: none; border: 1px dashed var(--line-strong); color: var(--ink-faint); font-weight: 500;
+  }
+  .chip.add.editable:hover { filter: none; border-color: var(--forest); color: var(--forest); }
+  /* Thin divider that sets the location chip apart from the attribute chips */
+  .chip-sep { width: 1px; align-self: stretch; background: var(--line); margin: 1px 3px; }
+
+  /* ---------- Inline edit popover ---------- */
+  .pop {
+    position: fixed; z-index: 60; background: var(--panel);
+    border: 1px solid var(--line-strong); border-radius: 12px; box-shadow: var(--shadow);
+    padding: 8px; min-width: 190px; max-width: 280px;
+    display: none; flex-direction: column; gap: 6px;
+  }
+  .pop.open { display: flex; }
+  .pop-title { font-size: 10.5px; text-transform: uppercase; letter-spacing: .05em; color: var(--ink-faint); font-weight: 700; padding: 2px 2px 0; }
+  .pop-row { display: flex; gap: 6px; flex-wrap: wrap; }
+  .pop .opt {
+    border: 1px solid var(--line-strong); background: var(--panel); color: var(--ink-soft);
+    border-radius: 7px; padding: 6px 9px; font-size: 13px; text-align: left; flex: 1 1 auto;
+  }
+  .pop .opt:hover { border-color: var(--forest); color: var(--forest); }
+  .pop .opt.sel { background: var(--accent-soft); border-color: var(--accent); color: var(--forest); font-weight: 600; }
+  .pop .opt .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 6px; vertical-align: middle; }
+  .pop input[type=date], .pop input[type=number] {
+    border: 1px solid var(--line-strong); border-radius: 7px; padding: 6px 8px; width: 100%; outline: none;
+  }
+  .pop input:focus { border-color: var(--forest); box-shadow: var(--ring); }
+  .pop .opt.pop-clear { color: var(--red); border-color: transparent; text-align: center; }
+  .pop .opt.pop-clear:hover { border-color: var(--red); background: #fdeceb; }
+
+  .subbar { margin-top: 8px; display: flex; align-items: center; gap: 9px; }
+  .subbar .track { flex: 1; max-width: 180px; height: 6px; background: #e6ebe0; border-radius: 5px; overflow: hidden; }
+  .subbar .fill { height: 100%; background: var(--accent); border-radius: 4px; }
+  .subbar .frac { font-size: 11.5px; color: var(--ink-faint); }
+
+  /* ---------- Group cluster ---------- */
+  .group-cluster {
+    border: 1px solid var(--line); border-left: 3px solid var(--line-strong);
+    border-radius: var(--radius); background: #f4f5f2;
+    padding: 8px 8px 4px; margin-bottom: 12px;
+  }
+  .group-cluster.done-all { border-left-color: var(--line-strong); background: #f3f5f0; }
+  .group-head-card {
+    display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+    padding: 8px 8px 10px; cursor: pointer;
+  }
+  .group-head-card .g-name {
+    font-weight: 700; color: var(--forest); font-size: 14.5px;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .group-cluster.done-all .g-name { color: var(--ink-faint); text-decoration: line-through; }
+  .group-head-card:hover .g-name { text-decoration: underline; }
+  .group-head-card .subbar { margin-top: 0; margin-left: auto; }
+  .group-cluster .todo { background: var(--panel); }
+  .group-empty { padding: 2px 10px 8px; color: var(--ink-faint); font-size: 12.5px; }
+  .chip.group-tag { background: #eef0ec; color: var(--ink-soft); font-weight: 600; }
+
+  .empty { text-align: center; color: var(--ink-faint); padding: 70px 20px; }
+  .empty .big { font-size: 34px; margin-bottom: 10px; }
+
+  /* ---------- Detail drawer ---------- */
+  .scrim { position: fixed; inset: 0; background: rgba(20,22,26,.28); opacity: 0; pointer-events: none; transition: opacity .18s; z-index: 40; }
+  .scrim.open { opacity: 1; pointer-events: auto; }
+  .drawer {
+    position: fixed; top: 0; right: 0; height: 100vh; width: 400px; max-width: 92vw;
+    background: var(--panel); border-left: 1px solid var(--line);
+    box-shadow: -10px 0 40px rgba(0,0,0,.12); z-index: 50;
+    transform: translateX(100%); transition: transform .2s ease;
+    display: flex; flex-direction: column;
+  }
+  .drawer.open { transform: translateX(0); }
+  .drawer-head { padding: 16px 20px; border-bottom: 1px solid var(--line); display: flex; align-items: center; gap: 10px; }
+  .drawer-head .btn { padding: 5px 9px; }
+  .drawer-body { padding: 18px 20px; overflow-y: auto; flex: 1; }
+
+  .field { margin-bottom: 16px; }
+  .field label { display: block; font-size: 11.5px; font-weight: 600; color: var(--ink-faint); text-transform: uppercase; letter-spacing: .04em; margin-bottom: 6px; }
+  .field input[type=text], .field textarea, .field select, .field input[type=date], .field input[type=number] {
+    width: 100%; border: 1px solid var(--line-strong); border-radius: 8px; padding: 8px 10px; background: var(--panel); outline: none;
+  }
+  .field input:focus, .field textarea:focus, .field select:focus { border-color: var(--forest); box-shadow: var(--ring); }
+  .field textarea { resize: vertical; min-height: 60px; }
+  .field-row { display: flex; gap: 10px; }
+  .field-row .field { flex: 1; }
+
+  .seg { display: flex; gap: 6px; }
+  .seg button { flex: 1; border: 1px solid var(--line-strong); background: var(--panel); border-radius: 8px; padding: 7px; font-size: 13px; color: var(--ink-soft); }
+  .seg button.on-1 { background: #eaf6df; border-color: var(--green); color: var(--green); font-weight: 600; }
+  .seg button.on-2 { background: #fbf1d3; border-color: var(--amber); color: var(--amber); font-weight: 600; }
+  .seg button.on-3 { background: #fdeceb; border-color: var(--red); color: var(--red); font-weight: 600; }
+
+  .sub-list { margin-top: 4px; }
+  .sub-item { display: flex; align-items: center; gap: 8px; padding: 5px 0; }
+  .sub-item .schk { width: 16px; height: 16px; border-radius: 4px; border: 1.6px solid var(--line-strong); flex: none; background: none; color: #fff; font-size: 10px; display: flex; align-items: center; justify-content: center; }
+  .sub-item.done .schk { background: var(--green); border-color: var(--green); }
+  .sub-item.done .stxt { text-decoration: line-through; color: var(--ink-faint); }
+  .sub-item .stxt { flex: 1; border: none; background: none; outline: none; padding: 2px; }
+  .sub-item .sdel { border: none; background: none; color: var(--ink-faint); font-size: 15px; padding: 0 4px; }
+  .sub-item .sdel:hover { color: var(--red); background: #fdeceb; border-radius: 5px; }
+  .sub-item .gopen { border: none; background: none; color: var(--ink-faint); font-size: 15px; padding: 0 4px; flex: none; }
+  .sub-item .gopen:hover { color: var(--forest); background: var(--accent-soft); border-radius: 5px; }
+  .sub-item .stxt { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .sub-add { display: flex; align-items: center; gap: 8px; padding: 6px 0; }
+  .sub-add input { flex: 1; border: none; border-bottom: 1px dashed var(--line-strong); background: none; outline: none; padding: 4px 2px; }
+
+  .drawer-foot { padding: 14px 20px; border-top: 1px solid var(--line); display: flex; gap: 10px; }
+  .btn.danger { color: var(--red); border-color: transparent; }
+  .btn.danger:hover { border-color: var(--red); background: #fdeceb; }
+  .btn.primary { background: var(--accent); color: var(--forest); border-color: var(--accent); font-weight: 700; border-radius: 999px; padding: 8px 18px; }
+  .btn.primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); color: var(--forest); }
+
+  input[type=color] { display: none; }
+  .hidden { display: none !important; }
+
+  @media (max-width: 720px) {
+    .app { grid-template-columns: 1fr; }
+    .sidebar { display: none; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="brand">Todo<span>·</span>Overview</div>
+
+    <div class="nav-group">
+      <div class="nav-label">Views</div>
+      <div id="viewNav"></div>
+    </div>
+
+    <div class="nav-group">
+      <div class="nav-label">Areas
+        <button id="addAreaBtn" title="Add area">+</button>
+      </div>
+      <div id="areaNav"></div>
+    </div>
+
+    <div class="nav-group" style="margin-top:auto;">
+      <div class="nav-label">Data</div>
+      <button class="nav-item" id="checkNotesBtn"><span class="ico">📥</span> Check Notes</button>
+      <button class="nav-item" id="exportBtn"><span class="ico">⬇</span> Export backup</button>
+      <button class="nav-item" id="importBtn"><span class="ico">⬆</span> Import backup</button>
+      <input type="file" id="importFile" accept="application/json" class="hidden" />
+      <div id="lastChanged" class="last-changed"></div>
+    </div>
+  </aside>
+
+  <!-- Main -->
+  <main class="main">
+    <div class="topbar">
+      <div class="mode-toggle" id="modeToggle">
+        <button data-mode="work"><span class="ic">💼</span> Work</button>
+        <button data-mode="private"><span class="ic">🏠</span> Private</button>
+      </div>
+      <div class="mode-div"></div>
+      <div>
+        <h1 id="viewTitle">All active</h1>
+        <div class="sub" id="viewSub"></div>
+      </div>
+      <div class="spacer"></div>
+    </div>
+
+    <div class="toolbar">
+      <div class="quickadd">
+        <span class="plus">+</span>
+        <input id="quickAdd" type="text" placeholder="Add a todo and press Enter…" />
+      </div>
+      <select class="control" id="sortSel">
+        <option value="smart">Sort: Smart</option>
+        <option value="due">Sort: Due date</option>
+        <option value="prio">Sort: Priority</option>
+        <option value="est">Sort: Time estimate</option>
+        <option value="created">Sort: Newest</option>
+      </select>
+      <select class="control" id="groupSel">
+        <option value="none">Arrange by: None</option>
+        <option value="project">Arrange by: Project</option>
+        <option value="area">Arrange by: Area</option>
+        <option value="prio">Arrange by: Priority</option>
+      </select>
+      <button class="btn" id="newGroupBtn" title="Create a set of related todos">🗂 New set</button>
+    </div>
+
+    <div class="filterbar" id="filterBar"></div>
+
+    <div class="imp-banner hidden" id="importBanner"></div>
+
+    <div class="list-wrap" id="listWrap"></div>
+  </main>
+</div>
+
+<!-- Detail drawer -->
+<div class="scrim" id="scrim"></div>
+<aside class="drawer" id="drawer">
+  <div class="drawer-head">
+    <button class="btn ghost" id="drawerClose">‹ Close</button>
+    <div class="spacer" style="flex:1"></div>
+    <button class="btn" id="starBtn" title="Flag for Focus Today">☆ Focus</button>
+  </div>
+  <div class="drawer-body" id="drawerBody"></div>
+  <div class="drawer-foot">
+    <button class="btn danger" id="deleteBtn">Delete</button>
+    <div style="flex:1"></div>
+    <button class="btn primary" id="doneBtn">Mark done</button>
+  </div>
+</aside>
+
+<!-- Inline edit popover (positioned in JS next to the clicked chip) -->
+<div class="pop" id="pop"></div>
+
+<!-- Pure business rules, shared with the Node test toolbox (see logic.js) -->
+<script src="logic.js"></script>
+
+<script>
+"use strict";
+
+/* ============================ State ============================ */
+const STORE_KEY = "todo_overview_v1";
+const AREA_COLORS = ["#3b6ea5","#3f9c5a","#c98a1a","#8a5cc9","#c14a3f","#2a9d9d","#c94a86","#6b7280"];
+
+// Optional Apple Notes import: a local helper (see notes-helper/) serves TODO: lines here.
+// If it isn't running, fetches fail silently and the app behaves exactly as before.
+const NOTES_HELPER_URL = "http://localhost:8787/todos";
+const INBOX_AREA_NAME = "Inbox";
+
+let state = load();
+let ui = { view: "all", areaId: null, projectId: null, sort: "smart", group: "project", openId: null, openGroupId: null, filters: noFilters(), mode: state.mode || "work" };
+
+// Signature of the REAL data only (view prefs like mode/sort/filter are excluded), so
+// updatedAt bumps on genuine edits — not on merely opening the app or changing the view.
+function contentSig(s) {
+  return JSON.stringify({ a: s.areas, p: s.projects, g: s.groups, t: s.todos, k: s.importedKeys });
+}
+let lastSig = contentSig(state);
+
+function load() {
+  try {
+    const raw = localStorage.getItem(STORE_KEY);
+    if (raw) return migrate(JSON.parse(raw));
+  } catch (e) {}
+  return seed();
+}
+
+// migrate() and uid() live in logic.js (loaded above) — see the safety-net note in CLAUDE.md.
+// Stamp updatedAt only when the real data changed (see contentSig above), so opening the
+// app / switching mode / sorting / filtering never makes this device look "newer".
+function save() {
+  const sig = contentSig(state);
+  if (sig !== lastSig) { state.updatedAt = Date.now(); lastSig = sig; }
+  localStorage.setItem(STORE_KEY, JSON.stringify(state));
+}
+
+function seed() {
+  const work = { id: uid(), name: "Work", color: AREA_COLORS[0], scope: "work" };
+  const priv = { id: uid(), name: "Private", color: AREA_COLORS[1], scope: "private" };
+  const pAlpha = { id: uid(), areaId: work.id, name: "Project Alpha" };
+  const pAdmin = { id: uid(), areaId: priv.id, name: "Admin (car, doctor…)" };
+  const today = new Date();
+  const iso = d => d.toISOString().slice(0, 10);
+  const plus = n => { const d = new Date(today); d.setDate(d.getDate() + n); return iso(d); };
+  // Demo group: a bundle of real todos under Private › Admin.
+  const chgTires = { id: uid(), name: "Change tires", prio: 3, areaId: priv.id, projectId: pAdmin.id, due: plus(20), createdAt: Date.now() };
+  return {
+    mode: "work",
+    updatedAt: Date.now(),
+    areas: [work, priv],
+    projects: [pAlpha, pAdmin],
+    groups: [chgTires],
+    importedKeys: [],
+    todos: [
+      { id: uid(), title: "Prepare kickoff slides", areaId: work.id, projectId: pAlpha.id, prio: 3, due: plus(1), est: 90, star: true, longterm: false, notes: "", done: false, createdAt: Date.now(), groupId: null },
+      { id: uid(), title: "Reply to vendor email", areaId: work.id, projectId: pAlpha.id, prio: 2, due: plus(0), est: 10, star: false, longterm: false, notes: "", done: false, createdAt: Date.now(), groupId: null },
+      { id: uid(), title: "Plan Q4 team offsite", areaId: work.id, projectId: null, prio: 2, due: plus(75), est: 120, star: false, longterm: false, notes: "Venue + agenda.", done: false, createdAt: Date.now(), groupId: null },
+      { id: uid(), title: "Book car service", areaId: priv.id, projectId: pAdmin.id, prio: 2, due: plus(3), est: 15, star: false, longterm: false, notes: "Winter tires too.", done: false, createdAt: Date.now(), groupId: chgTires.id },
+      { id: uid(), title: "Bring the car", areaId: priv.id, projectId: pAdmin.id, prio: 1, due: plus(4), est: null, star: false, longterm: false, notes: "", done: false, createdAt: Date.now(), groupId: chgTires.id },
+      { id: uid(), title: "Fetch the car", areaId: priv.id, projectId: pAdmin.id, prio: 1, due: plus(5), est: null, star: false, longterm: false, notes: "", done: false, createdAt: Date.now(), groupId: chgTires.id },
+      { id: uid(), title: "Schedule dentist appointment", areaId: priv.id, projectId: pAdmin.id, prio: 1, due: "", est: 10, star: false, longterm: false, notes: "", done: false, createdAt: Date.now(), groupId: null },
+      { id: uid(), title: "Renew gym membership", areaId: priv.id, projectId: null, prio: 1, due: plus(-1), est: 5, star: false, longterm: false, notes: "", done: false, createdAt: Date.now(), groupId: null },
+      { id: uid(), title: "Research a language course", areaId: priv.id, projectId: null, prio: 1, due: "", est: null, star: false, longterm: true, notes: "Someday — no rush.", done: false, createdAt: Date.now(), groupId: null }
+    ]
+  };
+}
+
+/* ============================ Helpers ============================ */
+const $ = sel => document.querySelector(sel);
+const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
+
+// todayISO(), daysUntil(), fmtDue(), fmtEst() live in logic.js (loaded above).
+
+// Short absolute date+time for the import summary, e.g. "today 10:00" / "Jul 21 14:35".
+// Returns "unknown" for a falsy/0 stamp (an older backup made before updatedAt existed).
+function fmtStamp(ms) {
+  if (!ms) return "unknown";
+  const d = new Date(ms);
+  const hm = d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", hour12: false });
+  const isToday = d.toDateString() === new Date().toDateString();
+  if (isToday) return "today " + hm;
+  return d.toLocaleDateString(undefined, { month: "short", day: "numeric" }) + " " + hm;
+}
+
+// "YYYY-MM-DD-HHMM" in LOCAL time, for the export filename — so same-day backups don't
+// collide or overwrite each other in an iCloud folder.
+function nowStampFilename() {
+  const d = new Date();
+  const p = n => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}`;
+}
+
+// Cozy relative label for the sidebar freshness line: "just now / 5m ago / 2h ago / 3d ago",
+// falling back to a short absolute date past ~6 days; "—" for an unknown (0) stamp.
+function fmtRelative(ms) {
+  if (!ms) return "—";
+  const secs = Math.floor((Date.now() - ms) / 1000);
+  if (secs < 60) return "just now";
+  const mins = Math.floor(secs / 60);
+  if (mins < 60) return mins + "m ago";
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return hrs + "h ago";
+  const days = Math.floor(hrs / 24);
+  if (days <= 6) return days + "d ago";
+  return new Date(ms).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
+
+const PRIO = { 1: "Low", 2: "Medium", 3: "High" };
+const areaById = id => state.areas.find(a => a.id === id);
+const projectById = id => state.projects.find(p => p.id === id);
+// isQuickWin(), LONGTERM_DAYS and isLongTerm() live in logic.js (loaded above).
+// Is this todo in the currently selected Work/Private mode? (its area decides)
+const inMode = t => { const a = areaById(t.areaId); return a && a.scope === ui.mode; };
+
+/* ---- Groups (bundles of real todos; not sidebar citizens) ---- */
+const groupById = id => state.groups.find(g => g.id === id);
+const groupTasks = gid => state.todos.filter(t => t.groupId === gid);
+const groupProgress = g => { const ts = groupTasks(g.id);
+  return { done: ts.filter(t => t.done).length, total: ts.length }; };
+
+/* ============================ Views / filtering ============================ */
+const VIEWS = [
+  { id: "all", icon: "◎", label: "All active", filter: t => !t.done },
+  { id: "today", icon: "★", label: "Focus Today", filter: t => !t.done && (t.star || (t.due && daysUntil(t.due) <= 0)) },
+  { id: "quickwins", icon: "⚡", label: "Quick Wins", filter: t => isQuickWin(t) },
+  { id: "upcoming", icon: "▤", label: "Upcoming (7d)", filter: t => !t.done && t.due && daysUntil(t.due) >= 0 && daysUntil(t.due) <= 7 },
+  { id: "overdue", icon: "!", label: "Overdue", filter: t => !t.done && t.due && daysUntil(t.due) < 0 },
+  { id: "longterm", icon: "🌱", label: "Long-term", filter: t => !t.done && isLongTerm(t) },
+  { id: "done", icon: "✓", label: "Completed", filter: t => t.done }
+];
+// Time-focused views hide long-term items so your day-to-day list stays near-term.
+const HIDE_LT = new Set(["all", "today", "quickwins", "upcoming", "overdue"]);
+
+// Cross-project attribute filters (FILTERS), noFilters() and passesFilters() live in
+// logic.js (loaded above); passesFilters now takes ui.filters as an argument at the call
+// site. anyFilterActive() stays here because it reads the app's live ui.filters.
+function anyFilterActive() { return FILTERS.some(f => ui.filters[f.key]); }
+
+function currentFilter() {
+  if (ui.view === "area") {
+    if (ui.projectId) return t => t.projectId === ui.projectId && !t.done;
+    return t => t.areaId === ui.areaId && !t.done;
+  }
+  const v = VIEWS.find(v => v.id === ui.view) || VIEWS[0];
+  return t => inMode(t) && v.filter(t) && (!HIDE_LT.has(v.id) || !isLongTerm(t));
+}
+function currentTitle() {
+  if (ui.view === "area") {
+    if (ui.projectId) return projectById(ui.projectId)?.name || "Project";
+    return areaById(ui.areaId)?.name || "Area";
+  }
+  return (VIEWS.find(v => v.id === ui.view) || VIEWS[0]).label;
+}
+
+// smartScore(t), groupScore(g, tasks) and sortTodos(list, sortMode) live in logic.js
+// (loaded above). groupScore/sortTodos now take their group tasks / sort mode as arguments
+// at the call sites (previously read from state/ui), so they stay pure and testable.
+
+/* ============================ Rendering ============================ */
+function render() {
+  renderNav();
+  renderFilterBar();
+  renderList();
+  save();
+  updateFreshness();   // after save(): reads the just-bumped state.updatedAt (off-by-one otherwise)
+}
+
+// Sidebar "Last changed …" line, so the owner can judge how fresh this device is before syncing.
+function updateFreshness() {
+  const elm = $("#lastChanged");
+  if (elm) elm.textContent = state.updatedAt ? "Last changed " + fmtRelative(state.updatedAt) : "";
+}
+
+function renderFilterBar() {
+  const bar = $("#filterBar"); bar.innerHTML = "";
+  bar.appendChild(el("span", "fb-label", "Show only"));
+  FILTERS.forEach(f => {
+    const b = el("button", "fb-chip" + (ui.filters[f.key] ? " on" : ""));
+    b.innerHTML = `<span class="fb-ic">${f.icon}</span> ${escapeHtml(f.label)}`;
+    b.onclick = () => { ui.filters[f.key] = !ui.filters[f.key]; render(); };
+    bar.appendChild(b);
+  });
+  if (anyFilterActive()) {
+    const clr = el("button", "fb-clear", "Clear");
+    clr.onclick = () => { ui.filters = noFilters(); render(); };
+    bar.appendChild(clr);
+  }
+}
+
+function renderNav() {
+  // Reflect the active mode on the toggle + theme the app
+  document.body.dataset.mode = ui.mode;
+  $("#modeToggle").querySelectorAll("button").forEach(b => b.classList.toggle("active", b.dataset.mode === ui.mode));
+
+  // Views (counts are scoped to the current mode)
+  const vn = $("#viewNav"); vn.innerHTML = "";
+  VIEWS.forEach(v => {
+    const count = state.todos.filter(t => inMode(t) && v.filter(t) && (!HIDE_LT.has(v.id) || !isLongTerm(t))).length;
+    const b = el("button", "nav-item" + (ui.view === v.id ? " active" : ""));
+    b.innerHTML = `<span class="ico">${v.icon}</span> ${v.label}`;
+    if (v.id !== "done") { const c = el("span", "count", count); b.appendChild(c); }
+    b.onclick = () => { ui.view = v.id; ui.areaId = null; ui.projectId = null; render(); };
+    vn.appendChild(b);
+  });
+
+  // Areas + projects (only those belonging to the current mode)
+  const an = $("#areaNav"); an.innerHTML = "";
+  const modeAreas = state.areas.filter(a => a.scope === ui.mode);
+  if (!modeAreas.length) {
+    an.appendChild(el("div", "", "")).style.cssText = "padding:2px 8px;color:var(--ink-faint);font-size:12.5px";
+    an.lastChild.textContent = "No areas yet — use + above.";
+  }
+  modeAreas.forEach(area => {
+    const cnt = state.todos.filter(t => t.areaId === area.id && !t.done).length;
+    const b = el("button", "nav-item" + (ui.view === "area" && ui.areaId === area.id && !ui.projectId ? " active" : ""));
+    const dot = el("span", "dot"); dot.style.background = area.color;
+    b.appendChild(dot); b.appendChild(document.createTextNode(area.name));
+    const mv = el("span", "area-move", "⇄");
+    mv.title = "Move to " + (ui.mode === "work" ? "Private" : "Work");
+    mv.onclick = e => { e.stopPropagation(); moveAreaScope(area); };
+    b.appendChild(mv);
+    const c = el("span", "count", cnt); b.appendChild(c);
+    b.onclick = () => { ui.view = "area"; ui.areaId = area.id; ui.projectId = null; render(); };
+    b.oncontextmenu = e => { e.preventDefault(); renameArea(area); };
+    an.appendChild(b);
+
+    const projs = state.projects.filter(p => p.areaId === area.id);
+    projs.forEach(p => {
+      const pc = state.todos.filter(t => t.projectId === p.id && !t.done).length;
+      const pb = el("button", "nav-item nav-sub" + (ui.projectId === p.id ? " active" : ""));
+      pb.innerHTML = `<span class="ico" style="font-size:11px;color:var(--ink-faint)">›</span> ${escapeHtml(p.name)}`;
+      const c2 = el("span", "count", pc); pb.appendChild(c2);
+      pb.onclick = () => { ui.view = "area"; ui.areaId = area.id; ui.projectId = p.id; render(); };
+      pb.oncontextmenu = e => { e.preventDefault(); renameProject(p); };
+      an.appendChild(pb);
+    });
+
+    const addP = el("button", "nav-item nav-sub", null);
+    addP.innerHTML = `<span class="ico" style="color:var(--ink-faint)">+</span> <span style="color:var(--ink-faint)">Add project</span>`;
+    addP.onclick = () => addProject(area.id);
+    an.appendChild(addP);
+  });
+}
+
+// Groups that belong to the current browse view (used to place clusters, incl. empties).
+function groupsInView() {
+  return state.groups.filter(g => {
+    if (ui.view === "area") {
+      if (ui.projectId) return g.areaId === ui.areaId && g.projectId === ui.projectId;
+      return g.areaId === ui.areaId;
+    }
+    const a = areaById(g.areaId);
+    return a && a.scope === ui.mode;
+  });
+}
+
+function renderList() {
+  $("#viewTitle").textContent = currentTitle();
+  const wrap = $("#listWrap"); wrap.innerHTML = "";
+
+  // Attribute filters narrow the list across every project/set (AND logic); this makes
+  // subLine, the arrange-by blocks, and their counts all reflect the filtered set.
+  const list = state.todos.filter(currentFilter()).filter(t => passesFilters(t, ui.filters));
+  $("#viewSub").textContent = subLine(list);
+
+  // Browse views (All active, an area, a project) keep a set bundled as a cluster no matter
+  // how the list is arranged — the set is treated as one unit that carries its own
+  // priority/area/project. Time-views, Completed and Long-term deliberately show a set's
+  // tasks standalone (tagged), so a single task can surface on its own (e.g. a Quick Win).
+  const browse = ui.view === "all" || ui.view === "area";
+  // Empty/just-created sets normally show, but a filter is a "narrow down" — sets with no
+  // matching task should disappear like any other empty block.
+  const relGroups = (browse && !anyFilterActive()) ? groupsInView() : [];
+
+  if (!list.length && !relGroups.length) {
+    const e = el("div", "empty");
+    if (anyFilterActive()) {
+      e.innerHTML = `<div class="big">🔍</div><div>No todos match the active filters.</div>`;
+      const clr = el("button", "btn", "Clear filters"); clr.style.marginTop = "12px";
+      clr.onclick = () => { ui.filters = noFilters(); render(); };
+      e.appendChild(clr);
+    } else {
+      e.innerHTML = `<div class="big">✳</div><div>Nothing here yet.</div>
+        <div style="font-size:12.5px;margin-top:6px">Add a todo above to get started.</div>`;
+    }
+    wrap.appendChild(e);
+    return;
+  }
+
+  if (browse) {
+    // Loose todos + set clusters as interleaved units.
+    const units = buildUnits(list, relGroups);
+    if (ui.group === "none") {
+      orderUnits(units).forEach(u => renderUnit(wrap, u));
+    } else {
+      // Arrange the units into blocks (by project / area / priority), placing each set by
+      // its own key so the whole set lands in one block and stays clustered.
+      groupByUnits(units).forEach((b, i) => {
+        if (i > 0) wrap.appendChild(el("div", "group-sep"));   // divider between blocks, not above the first
+        const h = el("div", "group-head");
+        h.appendChild(document.createTextNode(b.label));
+        const n = b.items.reduce((s, u) => s + (u.type === "todo" ? 1 : u.tasks.length), 0);
+        h.appendChild(el("span", "g-count", " · " + n));
+        wrap.appendChild(h);
+        orderUnits(b.items).forEach(u => renderUnit(wrap, u));
+      });
+    }
+  } else if (ui.group === "none") {
+    sortTodos(list, ui.sort).forEach(t => wrap.appendChild(todoCard(t, { showGroupTag: true })));
+  } else {
+    groupBy(sortTodos(list, ui.sort)).forEach((g, gi) => {
+      if (gi > 0) wrap.appendChild(el("div", "group-sep"));
+      const h = el("div", "group-head");
+      h.appendChild(document.createTextNode(g.label));
+      h.appendChild(el("span", "g-count", " · " + g.items.length));
+      wrap.appendChild(h);
+      g.items.forEach(t => wrap.appendChild(todoCard(t, { showGroupTag: true })));
+    });
+  }
+}
+
+// Build the browse-view units: each ungrouped todo is its own unit; each set becomes one
+// unit carrying its (sorted) member tasks. Empty/just-created sets from relGroups are
+// appended so they still show. A set is placed and arranged as a single thing.
+function buildUnits(list, relGroups) {
+  const tasksByGroup = new Map();
+  list.forEach(t => {
+    if (!t.groupId) return;
+    if (!tasksByGroup.has(t.groupId)) tasksByGroup.set(t.groupId, []);
+    tasksByGroup.get(t.groupId).push(t);
+  });
+
+  const units = [];
+  const seen = new Set();
+  list.forEach(t => {
+    if (!t.groupId) { units.push({ type: "todo", todo: t }); return; }
+    if (seen.has(t.groupId)) return;
+    seen.add(t.groupId);
+    const g = groupById(t.groupId);
+    if (g) units.push({ type: "group", group: g, tasks: sortTodos(tasksByGroup.get(t.groupId) || [], ui.sort) });
+  });
+  relGroups.forEach(g => {
+    if (seen.has(g.id)) return;
+    seen.add(g.id);
+    units.push({ type: "group", group: g, tasks: [] });
+  });
+  return units;
+}
+
+function renderUnit(wrap, u) {
+  if (u.type === "todo") wrap.appendChild(todoCard(u.todo));
+  else wrap.appendChild(groupCluster(u.group, u.tasks));
+}
+
+// Bucket browse-view units by the arrange-by dimension. A set contributes its OWN
+// area/project/priority (not its members') so the whole set stays in one block.
+function groupByUnits(units) {
+  const map = new Map();
+  const push = (key, label, order) => {
+    if (!map.has(key)) map.set(key, { label, order, items: [] });
+    return map.get(key);
+  };
+  units.forEach(u => {
+    const areaId = u.type === "todo" ? u.todo.areaId : u.group.areaId;
+    const projectId = u.type === "todo" ? u.todo.projectId : u.group.projectId;
+    const prio = u.type === "todo" ? u.todo.prio : u.group.prio;
+    if (ui.group === "project") {
+      const p = projectById(projectId);
+      const a = areaById(areaId);
+      const key = projectId || "none_" + areaId;
+      const label = p ? `${a?.name || ""} › ${p.name}` : `${a?.name || "No area"} · (no project)`;
+      push(key, label, 0).items.push(u);
+    } else if (ui.group === "area") {
+      const a = areaById(areaId);
+      push(areaId || "none", a?.name || "No area", 0).items.push(u);
+    } else if (ui.group === "prio") {
+      push("p" + prio, PRIO[prio] + " priority", -prio).items.push(u);
+    }
+  });
+  return [...map.values()].sort((a, b) => a.order - b.order);
+}
+
+// Order a mix of loose-todo units and group units by the active sort. Groups have no
+// time estimate, so under Sort: Time estimate they fall to the end.
+function orderUnits(units) {
+  const big = 1e9;
+  const dueOf = u => u.type === "todo" ? (u.todo.due ? daysUntil(u.todo.due) : big) : (u.group.due ? daysUntil(u.group.due) : big);
+  const prioOf = u => u.type === "todo" ? u.todo.prio : u.group.prio;
+  const estOf = u => u.type === "todo" ? (u.todo.est || big) : big;
+  const createdOf = u => u.type === "todo" ? u.todo.createdAt : u.group.createdAt;
+  const scoreOf = u => u.type === "todo" ? smartScore(u.todo) : groupScore(u.group, groupTasks(u.group.id));
+  const arr = [...units];
+  const s = ui.sort;
+  if (s === "due") arr.sort((a, b) => dueOf(a) - dueOf(b));
+  else if (s === "prio") arr.sort((a, b) => prioOf(b) - prioOf(a) || dueOf(a) - dueOf(b));
+  else if (s === "est") arr.sort((a, b) => estOf(a) - estOf(b));
+  else if (s === "created") arr.sort((a, b) => createdOf(b) - createdOf(a));
+  else arr.sort((a, b) => scoreOf(b) - scoreOf(a));
+  return arr;
+}
+
+function subLine(list) {
+  const est = list.reduce((s, t) => s + (t.est || 0), 0);
+  const qw = list.filter(isQuickWin).length;
+  const parts = [`${list.length} todo${list.length === 1 ? "" : "s"}`];
+  if (est) parts.push(`~${fmtEst(est)} total`);
+  if (qw) parts.push(`${qw} quick win${qw === 1 ? "" : "s"}`);
+  return parts.join("  ·  ");
+}
+
+function groupBy(list) {
+  const map = new Map();
+  const push = (key, label, order) => {
+    if (!map.has(key)) map.set(key, { label, order, items: [] });
+    return map.get(key);
+  };
+  list.forEach(t => {
+    if (ui.group === "project") {
+      const p = projectById(t.projectId);
+      const a = areaById(t.areaId);
+      const key = t.projectId || "none_" + t.areaId;
+      const label = p ? `${a?.name || ""} › ${p.name}` : `${a?.name || "No area"} · (no project)`;
+      push(key, label, 0).items.push(t);
+    } else if (ui.group === "area") {
+      const a = areaById(t.areaId);
+      push(t.areaId || "none", a?.name || "No area", 0).items.push(t);
+    } else if (ui.group === "prio") {
+      push("p" + t.prio, PRIO[t.prio] + " priority", -t.prio).items.push(t);
+    }
+  });
+  return [...map.values()].sort((a, b) => a.order - b.order);
+}
+
+// Header chips for a group cluster: priority + optional deadline (red when overdue).
+function groupHeaderChips(group) {
+  const frag = document.createDocumentFragment();
+  frag.appendChild(el("span", "chip prio-" + group.prio, PRIO[group.prio]));
+  if (group.due) {
+    const d = daysUntil(group.due);
+    const cls = d < 0 ? " due-over" : d <= 2 ? " due-soon" : "";
+    frag.appendChild(el("span", "chip" + cls, "⏱ " + fmtDue(group.due)));
+  }
+  return frag;
+}
+
+// A group rendered as a cluster: clickable header + its member task cards.
+function groupCluster(group, tasks) {
+  const prog = groupProgress(group);
+  const allDone = prog.total > 0 && prog.done === prog.total;
+  const wrap = el("div", "group-cluster" + (allDone ? " done-all" : ""));
+
+  const head = el("div", "group-head-card");
+  head.dataset.groupId = group.id;
+  const name = el("span", "g-name");
+  name.appendChild(document.createTextNode((allDone ? "✓ " : "") + "🗂 " + group.name));
+  head.appendChild(name);
+  head.appendChild(groupHeaderChips(group));
+  const bar = el("div", "subbar");
+  const track = el("div", "track"); const fill = el("div", "fill");
+  fill.style.width = (prog.total ? Math.round(prog.done / prog.total * 100) : 0) + "%";
+  track.appendChild(fill); bar.appendChild(track);
+  bar.appendChild(el("span", "frac", `${prog.done}/${prog.total}`));
+  head.appendChild(bar);
+  head.onclick = () => openGroupDrawer(group.id);
+  wrap.appendChild(head);
+
+  tasks.forEach(t => wrap.appendChild(todoCard(t, { inCluster: true })));
+  if (!tasks.length) {
+    // Distinguish a truly empty group from one whose members are all done/hidden here.
+    const msg = prog.total ? (allDone ? "✓ All tasks complete" : "") : "No tasks yet — open the set to add one.";
+    if (msg) wrap.appendChild(el("div", "group-empty", msg));
+  }
+  return wrap;
+}
+
+function todoCard(t, opts = {}) {
+  const card = el("div", "todo" + (t.done ? " done" : ""));
+  // check
+  const chk = el("button", "check", t.done ? "✓" : "");
+  chk.onclick = e => { e.stopPropagation(); toggleDone(t); };
+  card.appendChild(chk);
+
+  const body = el("div", "t-body");
+  const title = el("div", "t-title");
+  if (t.star && !t.done) title.appendChild(el("span", "t-star", "★"));
+  title.appendChild(document.createTextNode(t.title));
+  body.appendChild(title);
+
+  const meta = el("div", "t-meta");
+  const area = areaById(t.areaId);
+  const proj = projectById(t.projectId);
+  // helper: attach a click that edits inline without opening the drawer
+  const onChip = (chip, editor) => { chip.onclick = e => { e.stopPropagation(); editor(chip, t); }; return chip; };
+
+  // Location chip — the "where it lives" level, styled apart from the attribute chips.
+  // Hidden inside a cluster: the group header already shows where the task lives.
+  if (area && !opts.inCluster) {
+    const chip = el("span", "chip loc editable");
+    const dot = el("span", "dot"); dot.style.background = area.color; chip.appendChild(dot);
+    chip.appendChild(document.createTextNode(proj ? proj.name : area.name));
+    chip.title = "Move to another area / project";
+    meta.appendChild(onChip(chip, editLoc));
+    meta.appendChild(el("span", "chip-sep"));
+  }
+
+  // Priority — always present (defaults to Low); click to change.
+  meta.appendChild(onChip(el("span", "chip editable prio-" + t.prio, PRIO[t.prio]), editPrio));
+
+  // Deadline — set it inline, or a faint "add" chip when empty.
+  if (t.due) {
+    const d = daysUntil(t.due);
+    const cls = d < 0 ? " due-over" : d <= 2 ? " due-soon" : "";
+    meta.appendChild(onChip(el("span", "chip editable" + cls, "⏱ " + fmtDue(t.due)), editWhen));
+  } else if (!t.done) {
+    meta.appendChild(onChip(el("span", "chip add editable", "⏱ Deadline"), editWhen));
+  }
+
+  // Time estimate — same pattern.
+  if (t.est) {
+    meta.appendChild(onChip(el("span", "chip editable est", "≈ " + fmtEst(t.est)), editEst));
+  } else if (!t.done) {
+    meta.appendChild(onChip(el("span", "chip add editable", "≈ Time"), editEst));
+  }
+
+  // Derived flags (not directly editable).
+  if (isQuickWin(t)) meta.appendChild(el("span", "chip qw", "⚡ Quick win"));
+  if (isLongTerm(t)) meta.appendChild(onChip(el("span", "chip lt editable", "🌱 Long-term"), editWhen));
+
+  // Group tag — shown when a grouped task stands alone (time-views etc.).
+  if (opts.showGroupTag && t.groupId) {
+    const g = groupById(t.groupId);
+    if (g) meta.appendChild(el("span", "chip group-tag", "🗂 " + g.name));
+  }
+  body.appendChild(meta);
+
+  card.appendChild(body);
+  card.onclick = () => openDrawer(t.id);
+  return card;
+}
+
+/* ============================ Inline chip editors ============================ */
+// A single reusable popover, positioned next to the clicked chip.
+let popAnchor = null;
+function closePop() {
+  const p = $("#pop");
+  if (p) { p.classList.remove("open"); p.innerHTML = ""; }
+  popAnchor = null;
+  document.removeEventListener("mousedown", onPopOutside, true);
+}
+function onPopOutside(e) {
+  const p = $("#pop");
+  if (!p) return;
+  if (p.contains(e.target)) return;
+  if (popAnchor && popAnchor.contains(e.target)) return;
+  closePop();
+}
+function openPop(anchor, build) {
+  const p = $("#pop");
+  p.innerHTML = "";
+  popAnchor = anchor;
+  build(p);
+  p.classList.add("open");
+  // Position under the chip, nudged to stay on screen.
+  p.style.visibility = "hidden";
+  const r = anchor.getBoundingClientRect();
+  requestAnimationFrame(() => {
+    const pw = p.offsetWidth, ph = p.offsetHeight, pad = 8;
+    let left = r.left, top = r.bottom + 6;
+    if (left + pw > window.innerWidth - pad) left = window.innerWidth - pad - pw;
+    if (left < pad) left = pad;
+    if (top + ph > window.innerHeight - pad) top = Math.max(pad, r.top - 6 - ph);
+    p.style.left = left + "px";
+    p.style.top = top + "px";
+    p.style.visibility = "visible";
+  });
+  // Delay so the click that opened it doesn't immediately close it.
+  setTimeout(() => document.addEventListener("mousedown", onPopOutside, true), 0);
+}
+// Apply a change, then close + re-render everything.
+function applyEdit(fn) { fn(); closePop(); render(); }
+
+function editPrio(anchor, t) {
+  openPop(anchor, p => {
+    p.appendChild(el("div", "pop-title", "Priority"));
+    const row = el("div", "pop-row");
+    [[1, "Low"], [2, "Medium"], [3, "High"]].forEach(([v, label]) => {
+      const b = el("button", "opt" + (t.prio === v ? " sel" : ""), label);
+      b.onclick = () => applyEdit(() => { t.prio = v; });
+      row.appendChild(b);
+    });
+    p.appendChild(row);
+  });
+}
+
+function editWhen(anchor, t) {
+  openPop(anchor, p => {
+    p.appendChild(el("div", "pop-title", "Deadline"));
+    const setDays = n => applyEdit(() => {
+      const d = new Date(); d.setDate(d.getDate() + n); t.due = d.toISOString().slice(0, 10);
+    });
+    const quick = el("div", "pop-row");
+    [["Today", 0], ["Tomorrow", 1], ["+1 week", 7], ["+1 month", 30]].forEach(([label, n]) => {
+      const b = el("button", "opt", label); b.onclick = () => setDays(n); quick.appendChild(b);
+    });
+    p.appendChild(quick);
+    const date = el("input"); date.type = "date"; date.value = t.due || "";
+    date.onchange = () => applyEdit(() => { t.due = date.value; });
+    p.appendChild(date);
+    p.appendChild(el("div", "pop-title", "Time horizon"));
+    const lt = el("button", "opt" + (t.longterm ? " sel" : ""), (t.longterm ? "✓ " : "") + "🌱 Someday / long-term");
+    lt.onclick = () => applyEdit(() => { t.longterm = !t.longterm; });
+    p.appendChild(lt);
+    if (t.due) {
+      const clr = el("button", "opt pop-clear", "Clear deadline");
+      clr.onclick = () => applyEdit(() => { t.due = ""; });
+      p.appendChild(clr);
+    }
+  });
+}
+
+function editEst(anchor, t) {
+  openPop(anchor, p => {
+    p.appendChild(el("div", "pop-title", "Time estimate"));
+    const row = el("div", "pop-row");
+    [5, 10, 15, 30, 45, 60, 90, 120].forEach(m => {
+      const b = el("button", "opt" + (t.est === m ? " sel" : ""), fmtEst(m));
+      b.onclick = () => applyEdit(() => { t.est = m; });
+      row.appendChild(b);
+    });
+    p.appendChild(row);
+    const inp = el("input"); inp.type = "number"; inp.min = "0"; inp.step = "5";
+    inp.placeholder = "Custom minutes…"; inp.value = t.est ?? "";
+    inp.onchange = () => applyEdit(() => { const v = parseInt(inp.value, 10); t.est = isNaN(v) ? null : v; });
+    p.appendChild(inp);
+    if (t.est) {
+      const clr = el("button", "opt pop-clear", "Clear");
+      clr.onclick = () => applyEdit(() => { t.est = null; });
+      p.appendChild(clr);
+    }
+  });
+}
+
+function editLoc(anchor, t) {
+  openPop(anchor, p => {
+    p.appendChild(el("div", "pop-title", "Area"));
+    const arow = el("div", "pop-row");
+    state.areas.filter(a => a.scope === ui.mode).forEach(a => {
+      const b = el("button", "opt" + (a.id === t.areaId ? " sel" : ""));
+      const dot = el("span", "dot"); dot.style.background = a.color; b.appendChild(dot);
+      b.appendChild(document.createTextNode(a.name));
+      b.onclick = () => applyEdit(() => { if (t.areaId !== a.id) { t.areaId = a.id; t.projectId = null; } });
+      arow.appendChild(b);
+    });
+    p.appendChild(arow);
+    p.appendChild(el("div", "pop-title", "Project"));
+    const prow = el("div", "pop-row");
+    const none = el("button", "opt" + (!t.projectId ? " sel" : ""), "— None —");
+    none.onclick = () => applyEdit(() => { t.projectId = null; });
+    prow.appendChild(none);
+    state.projects.filter(pr => pr.areaId === t.areaId).forEach(pr => {
+      const b = el("button", "opt" + (pr.id === t.projectId ? " sel" : ""), pr.name);
+      b.onclick = () => applyEdit(() => { t.projectId = pr.id; });
+      prow.appendChild(b);
+    });
+    p.appendChild(prow);
+  });
+}
+
+/* ============================ Actions ============================ */
+function toggleDone(t) {
+  t.done = !t.done;
+  t.completedAt = t.done ? Date.now() : null;
+  render();
+}
+
+function addTodo(title) {
+  title = title.trim();
+  if (!title) return;
+  let areaId = state.areas.find(a => a.scope === ui.mode)?.id, projectId = null;
+  if (ui.view === "area") { areaId = ui.areaId; projectId = ui.projectId || null; }
+  if (!areaId) { alert("Add an area first (use + next to Areas)."); return; }
+  const t = { id: uid(), title, areaId, projectId, prio: 1, due: "", est: null, star: false, longterm: false, notes: "", done: false, createdAt: Date.now(), groupId: null };
+  state.todos.unshift(t);
+  ui.filters = noFilters();   // a fresh todo (Low prio, no star/due) wouldn't match active filters — don't let it vanish
+  render();
+}
+
+/* ---- Mode (Work / Private) ---- */
+function setMode(m) {
+  if (ui.mode === m) return;
+  ui.mode = m;
+  state.mode = m;
+  // If we were looking at an area from the other mode, drop back to "All active"
+  if (ui.view === "area") {
+    const a = areaById(ui.areaId);
+    if (!a || a.scope !== m) { ui.view = "all"; ui.areaId = null; ui.projectId = null; }
+  }
+  render();
+}
+
+/* ---- Areas & projects ---- */
+function addArea() {
+  const where = ui.mode === "work" ? "Work" : "Private";
+  const name = prompt(`New area under ${where} (e.g. a team, or a life area like Health):`);
+  if (!name || !name.trim()) return;
+  const color = AREA_COLORS[state.areas.length % AREA_COLORS.length];
+  state.areas.push({ id: uid(), name: name.trim(), color, scope: ui.mode });
+  render();
+}
+function moveAreaScope(area) {
+  const target = area.scope === "work" ? "private" : "work";
+  if (!confirm(`Move "${area.name}" (and its projects & todos) to ${target === "work" ? "Work" : "Private"}?`)) return;
+  area.scope = target;
+  if (ui.areaId === area.id && ui.mode !== target) { ui.view = "all"; ui.areaId = null; ui.projectId = null; }
+  render();
+}
+function renameArea(area) {
+  const name = prompt("Rename area (leave empty to delete it and its todos):", area.name);
+  if (name === null) return;
+  if (!name.trim()) {
+    if (!confirm(`Delete area "${area.name}", its projects and todos?`)) return;
+    state.projects = state.projects.filter(p => p.areaId !== area.id);
+    state.todos = state.todos.filter(t => t.areaId !== area.id);
+    state.areas = state.areas.filter(a => a.id !== area.id);
+    if (ui.areaId === area.id) { ui.view = "all"; ui.areaId = null; ui.projectId = null; }
+  } else { area.name = name.trim(); }
+  render();
+}
+function addProject(areaId) {
+  const name = prompt("New project name:");
+  if (!name || !name.trim()) return;
+  state.projects.push({ id: uid(), areaId, name: name.trim() });
+  render();
+}
+function renameProject(p) {
+  const name = prompt("Rename project (leave empty to delete it; its todos stay in the area):", p.name);
+  if (name === null) return;
+  if (!name.trim()) {
+    if (!confirm(`Delete project "${p.name}"?`)) return;
+    state.todos.forEach(t => { if (t.projectId === p.id) t.projectId = null; });
+    state.projects = state.projects.filter(x => x.id !== p.id);
+    if (ui.projectId === p.id) ui.projectId = null;
+  } else { p.name = name.trim(); }
+  render();
+}
+
+/* ============================ Drawer ============================ */
+// One shared #drawer shell, dispatched to a todo view or a group view.
+function openDrawer(id) {
+  ui.openId = id;
+  ui.openGroupId = null;   // opening a task (e.g. from a group drawer) leaves the group view
+  $("#scrim").classList.add("open");
+  $("#drawer").classList.add("open");
+  renderDrawer();
+}
+function openGroupDrawer(id) {
+  ui.openGroupId = id;
+  ui.openId = null;
+  $("#scrim").classList.add("open");
+  $("#drawer").classList.add("open");
+  renderDrawer();
+}
+function closeDrawer() {
+  ui.openId = null;
+  ui.openGroupId = null;
+  $("#scrim").classList.remove("open");
+  $("#drawer").classList.remove("open");
+}
+function currentTodo() { return state.todos.find(t => t.id === ui.openId); }
+function currentGroup() { return state.groups.find(g => g.id === ui.openGroupId); }
+
+// Dispatch: group drawer when a group is open, else the todo drawer.
+function renderDrawer() {
+  if (ui.openGroupId) return renderGroupDrawer();
+  return renderTodoDrawer();
+}
+
+function renderTodoDrawer() {
+  const t = currentTodo();
+  if (!t) return;
+  // Restore the todo-drawer chrome (a group drawer may have repurposed these buttons).
+  $("#starBtn").classList.remove("hidden");
+  $("#doneBtn").classList.remove("hidden");
+  $("#deleteBtn").textContent = "Delete";
+  $("#starBtn").innerHTML = t.star ? "★ Focus" : "☆ Focus";
+  $("#starBtn").style.color = t.star ? "var(--amber)" : "";
+  $("#doneBtn").textContent = t.done ? "Mark not done" : "Mark done";
+
+  const areaOpts = state.areas.filter(a => a.scope === ui.mode).map(a => `<option value="${a.id}" ${a.id === t.areaId ? "selected" : ""}>${escapeHtml(a.name)}</option>`).join("");
+  const projs = state.projects.filter(p => p.areaId === t.areaId);
+  const projOpts = `<option value="">— No project —</option>` +
+    projs.map(p => `<option value="${p.id}" ${p.id === t.projectId ? "selected" : ""}>${escapeHtml(p.name)}</option>`).join("");
+  // Sets the todo can join: those living in its exact area + project (tasks inherit both).
+  const grps = state.groups.filter(g => g.areaId === t.areaId && (g.projectId || null) === (t.projectId || null));
+  const groupOpts = `<option value="">— None —</option>` +
+    grps.map(g => `<option value="${g.id}" ${g.id === t.groupId ? "selected" : ""}>${escapeHtml(g.name)}</option>`).join("") +
+    `<option value="__new">+ New set…</option>`;
+
+  $("#drawerBody").innerHTML = `
+    <div class="field">
+      <label>Title</label>
+      <input type="text" id="fTitle" value="${escapeAttr(t.title)}" />
+    </div>
+    <div class="field-row">
+      <div class="field">
+        <label>Area</label>
+        <select id="fArea">${areaOpts}</select>
+      </div>
+      <div class="field">
+        <label>Project</label>
+        <select id="fProject">${projOpts}</select>
+      </div>
+    </div>
+    <div class="field">
+      <label>Set</label>
+      <select id="fGroup">${groupOpts}</select>
+    </div>
+    <div class="field">
+      <label>Priority</label>
+      <div class="seg" id="fPrio">
+        <button data-p="1" class="${t.prio === 1 ? "on-1" : ""}">Low</button>
+        <button data-p="2" class="${t.prio === 2 ? "on-2" : ""}">Medium</button>
+        <button data-p="3" class="${t.prio === 3 ? "on-3" : ""}">High</button>
+      </div>
+    </div>
+    <div class="field-row">
+      <div class="field">
+        <label>Deadline</label>
+        <input type="date" id="fDue" value="${t.due || ""}" />
+      </div>
+      <div class="field">
+        <label>Time estimate (min)</label>
+        <input type="number" id="fEst" min="0" step="5" placeholder="e.g. 30" value="${t.est ?? ""}" />
+      </div>
+    </div>
+    <div class="field">
+      <label>Time horizon</label>
+      <button type="button" class="btn" id="fLongterm" ${t.longterm
+        ? 'style="width:100%;text-align:left;border-color:#2f8a4d;color:#2f8a4d;background:#e9f4ec"'
+        : 'style="width:100%;text-align:left"'}>${t.longterm ? "🌱 Long-term (someday) — on" : "🌱 Mark as long-term (someday)"}</button>
+      <div style="font-size:11px;color:var(--ink-faint);margin-top:6px">Long-term items are hidden from your daily views but stay visible in their area. A deadline ${LONGTERM_DAYS}+ days out counts automatically.</div>
+    </div>
+    <div class="field">
+      <label>Notes</label>
+      <textarea id="fNotes" placeholder="Details, links, context…">${escapeHtml(t.notes || "")}</textarea>
+    </div>
+    <div style="font-size:11.5px;color:var(--ink-faint)">Created ${new Date(t.createdAt).toLocaleDateString()}</div>
+  `;
+
+  // wire fields
+  $("#fTitle").oninput = e => { t.title = e.target.value; save(); scheduleListRefresh(); };
+  $("#fArea").onchange = e => { t.areaId = e.target.value; t.projectId = null; renderDrawer(); render(); };
+  $("#fProject").onchange = e => { t.projectId = e.target.value || null; save(); scheduleListRefresh(); };
+  $("#fGroup").onchange = e => {
+    const v = e.target.value;
+    if (v === "__new") { newGroup(t); return; }     // create a set and drop this todo in it
+    assignTodoToGroup(t, v || null);
+  };
+  $("#fDue").onchange = e => { t.due = e.target.value; save(); scheduleListRefresh(); };
+  $("#fEst").oninput = e => { const v = parseInt(e.target.value, 10); t.est = isNaN(v) ? null : v; save(); scheduleListRefresh(); };
+  $("#fNotes").oninput = e => { t.notes = e.target.value; save(); };
+  $("#fLongterm").onclick = () => { t.longterm = !t.longterm; renderDrawer(); render(); };
+  $("#fPrio").querySelectorAll("button").forEach(b => {
+    b.onclick = () => { t.prio = parseInt(b.dataset.p, 10); renderDrawer(); render(); };
+  });
+}
+
+/* ---- Group authoring ---- */
+// Create a group in the current area/project context (or homed on a pre-assigned todo),
+// then open its drawer. Mirrors addTodo()'s area/project resolution + guard.
+function newGroup(preAssign) {
+  let areaId = state.areas.find(a => a.scope === ui.mode)?.id, projectId = null;
+  if (ui.view === "area") { areaId = ui.areaId; projectId = ui.projectId || null; }
+  if (preAssign) { areaId = preAssign.areaId; projectId = preAssign.projectId || null; }
+  if (!areaId) { alert("Add an area first (use + next to Areas)."); return; }
+  const g = { id: uid(), name: "New set", prio: 1, areaId, projectId, due: "", createdAt: Date.now() };
+  state.groups.push(g);
+  if (preAssign) { preAssign.groupId = g.id; preAssign.areaId = g.areaId; preAssign.projectId = g.projectId; }
+  render();
+  openGroupDrawer(g.id);
+}
+
+// Move a todo into a group (snapping its area/project to the group's) or out of any group.
+function assignTodoToGroup(t, groupId) {
+  t.groupId = groupId || null;
+  if (t.groupId) {
+    const g = groupById(t.groupId);
+    if (g) { t.areaId = g.areaId; t.projectId = g.projectId; }
+  }
+  renderDrawer();
+  render();
+}
+
+// Move a group to another area/project within the current mode, carrying every task
+// (the inherit invariant). Cross-mode moves are done by moving the area in the sidebar.
+function moveGroupLoc(g, areaId, projectId) {
+  g.areaId = areaId;
+  g.projectId = projectId;
+  groupTasks(g.id).forEach(t => { t.areaId = areaId; t.projectId = projectId; });
+  renderGroupDrawer();
+  render();
+}
+
+// Delete a set and (after confirmation) all of its tasks.
+function deleteGroup(g) {
+  const n = groupTasks(g.id).length;
+  if (!confirm(`Delete set "${g.name}" and its ${n} task${n === 1 ? "" : "s"}?`)) return;
+  state.todos = state.todos.filter(t => t.groupId !== g.id);
+  state.groups = state.groups.filter(x => x.id !== g.id);
+  closeDrawer();
+  render();
+}
+
+function renderGroupDrawer() {
+  const g = currentGroup();
+  if (!g) return;
+  // Repurpose the shared drawer chrome for a set: no star / done; delete removes the set.
+  $("#starBtn").classList.add("hidden");
+  $("#doneBtn").classList.add("hidden");
+  $("#deleteBtn").textContent = "🗑 Delete set";
+
+  const tasks = groupTasks(g.id);
+  const prog = groupProgress(g);
+  const a = areaById(g.areaId), p = projectById(g.projectId);
+  const loc = p ? `${a ? a.name : ""} › ${p.name}` : (a ? a.name : "");
+  // Area/Project pickers are limited to the current mode, so a group can't be edited
+  // into the other mode (cross-mode moves happen by moving the area in the sidebar).
+  const gAreaOpts = state.areas.filter(x => x.scope === ui.mode).map(x => `<option value="${x.id}" ${x.id === g.areaId ? "selected" : ""}>${escapeHtml(x.name)}</option>`).join("");
+  const gProjs = state.projects.filter(pr => pr.areaId === g.areaId);
+  const gProjOpts = `<option value="">— No project —</option>` +
+    gProjs.map(pr => `<option value="${pr.id}" ${pr.id === g.projectId ? "selected" : ""}>${escapeHtml(pr.name)}</option>`).join("");
+  const rows = tasks.map(task => {
+    const dCls = task.due ? (daysUntil(task.due) < 0 ? " due-over" : daysUntil(task.due) <= 2 ? " due-soon" : "") : "";
+    const due = task.due ? `<span class="chip${dCls}">⏱ ${escapeHtml(fmtDue(task.due))}</span>` : "";
+    const prio = `<span class="chip prio-${task.prio}">${PRIO[task.prio]}</span>`;
+    return `
+    <div class="sub-item ${task.done ? "done" : ""}" data-id="${task.id}">
+      <button class="schk" data-act="gtoggle">${task.done ? "✓" : ""}</button>
+      <span class="stxt">${escapeHtml(task.title)}</span>
+      ${due}${prio}
+      <button class="gopen" data-act="gopen" title="Open this task">→</button>
+    </div>`;
+  }).join("");
+
+  $("#drawerBody").innerHTML = `
+    <div class="field">
+      <label>Set name</label>
+      <input type="text" id="gName" value="${escapeAttr(g.name)}" />
+    </div>
+    <div class="field">
+      <label>Priority</label>
+      <div class="seg" id="gPrio">
+        <button data-p="1" class="${g.prio === 1 ? "on-1" : ""}">Low</button>
+        <button data-p="2" class="${g.prio === 2 ? "on-2" : ""}">Medium</button>
+        <button data-p="3" class="${g.prio === 3 ? "on-3" : ""}">High</button>
+      </div>
+    </div>
+    <div class="field">
+      <label>Deadline</label>
+      <input type="date" id="gDue" value="${g.due || ""}" />
+      <div style="font-size:11px;color:var(--ink-faint);margin-top:6px">A reminder for the whole set. Each task keeps its own deadline and shows on its own in your time-focused views.</div>
+    </div>
+    <div class="field-row">
+      <div class="field">
+        <label>Area</label>
+        <select id="gArea">${gAreaOpts}</select>
+      </div>
+      <div class="field">
+        <label>Project</label>
+        <select id="gProject">${gProjOpts}</select>
+      </div>
+    </div>
+    <div style="font-size:11px;color:var(--ink-faint);margin:-8px 0 16px">Moving the set re-homes every task in it. To move it to ${ui.mode === "work" ? "Private" : "Work"}, move its area from the sidebar.</div>
+    <div class="field">
+      <label>Tasks ${tasks.length ? `· ${prog.done}/${prog.total} done` : ""}</label>
+      <div class="sub-list" id="gTaskList">${rows || '<div style="color:var(--ink-faint);font-size:12.5px;padding:4px 0">No tasks yet — add the first one below.</div>'}</div>
+      <div class="sub-add">
+        <span style="color:var(--ink-faint)">+</span>
+        <input id="gAddTask" placeholder="Add a task and press Enter…" />
+      </div>
+    </div>
+    <div style="font-size:11.5px;color:var(--ink-faint)">${escapeHtml(loc)} · Created ${new Date(g.createdAt).toLocaleDateString()}</div>
+  `;
+
+  $("#gName").oninput = e => { g.name = e.target.value; save(); scheduleListRefresh(); };
+  $("#gDue").onchange = e => { g.due = e.target.value; save(); scheduleListRefresh(); };
+  $("#gArea").onchange = e => { moveGroupLoc(g, e.target.value, null); };
+  $("#gProject").onchange = e => { moveGroupLoc(g, g.areaId, e.target.value || null); };
+  $("#gPrio").querySelectorAll("button").forEach(b => {
+    b.onclick = () => { g.prio = parseInt(b.dataset.p, 10); renderGroupDrawer(); render(); };
+  });
+  $("#gTaskList").querySelectorAll(".sub-item").forEach(row => {
+    const id = row.dataset.id;
+    const task = state.todos.find(x => x.id === id);
+    row.querySelector('[data-act=gtoggle]').onclick = () => { if (task) { toggleDone(task); renderGroupDrawer(); } };
+    row.querySelector('[data-act=gopen]').onclick = () => openDrawer(id);
+  });
+  const ga = $("#gAddTask");
+  ga.onkeydown = e => {
+    if (e.key === "Enter" && ga.value.trim()) {
+      state.todos.unshift({ id: uid(), title: ga.value.trim(), areaId: g.areaId, projectId: g.projectId,
+        prio: 1, due: "", est: null, star: false, longterm: false, notes: "", done: false, createdAt: Date.now(), groupId: g.id });
+      renderGroupDrawer(); render();
+      $("#gAddTask").focus();
+    }
+  };
+}
+
+let refreshTimer = null;
+function scheduleListRefresh() { clearTimeout(refreshTimer); refreshTimer = setTimeout(() => { renderList(); renderNav(); }, 350); }
+
+/* ============================ Export / Import ============================ */
+function exportData() {
+  const blob = new Blob([JSON.stringify(state, null, 2)], { type: "application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "todos-backup-" + nowStampFilename() + ".json";
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+function importData(file) {
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const data = JSON.parse(reader.result);
+      if (!data.areas || !data.todos) throw new Error("bad file");
+      const incoming = typeof data.updatedAt === "number" ? data.updatedAt : 0;  // RAW, pre-migrate
+      const current  = state.updatedAt || 0;
+      const summary =
+        `\n\nThis device:  ${state.todos.length} todos · last changed ${fmtStamp(current)}` +
+        `\nBackup file:  ${data.todos.length} todos · last changed ${fmtStamp(incoming)}`;
+      let msg;
+      if (incoming && current && incoming < current) {
+        msg = "⚠️ This backup is OLDER than the data on this device.\n" +
+              "Importing will REPLACE your newer data with this file." + summary +
+              "\n\nImport anyway and replace current todos?";
+      } else if (!incoming) {
+        msg = "This backup has no timestamp, so it may be older than your current data." +
+              summary + "\n\nThis replaces your current todos. Continue?";
+      } else {
+        msg = "This replaces your current todos with the backup." + summary + "\n\nContinue?";
+      }
+      if (!confirm(msg)) return;
+      state = migrate(data);
+      lastSig = contentSig(state);   // preserve the imported stamp; next save() sees no change
+      ui = { view: "all", areaId: null, projectId: null, sort: ui.sort, group: ui.group, openId: null, openGroupId: null, filters: noFilters(), mode: state.mode || "work" };
+      render();
+    } catch (e) { alert("Could not read that file. Make sure it's a backup exported from this app."); }
+  };
+  reader.readAsText(file);
+}
+
+/* ============================ Apple Notes import ============================ */
+// One-way import (Notes → app) via the optional local helper. Imported todos always
+// land in a Work "Inbox" area, keeping the Work/Private separation strict.
+
+// Find the "Inbox" area for the given scope ("work"/"private"), or create it.
+// Imported todos live here until the owner re-files them.
+function ensureInboxArea(scope) {
+  let inbox = state.areas.find(a => a.scope === scope && a.name === INBOX_AREA_NAME);
+  if (!inbox) {
+    inbox = { id: uid(), name: INBOX_AREA_NAME, color: AREA_COLORS[state.areas.length % AREA_COLORS.length], scope };
+    state.areas.push(inbox);
+  }
+  return inbox;
+}
+
+// A stable fingerprint of one Notes line, so we never import the same line twice.
+function importKey(it) { return it.noteId + " " + it.text; }
+
+// Fetch the helper, drop anything already seen, and show the review banner.
+// Silent on failure by design (helper not running = app works exactly as before).
+async function checkNotes() {
+  let data;
+  try {
+    const r = await fetch(NOTES_HELPER_URL);
+    if (!r.ok) throw 0;
+    data = await r.json();
+  } catch {
+    console.debug("notes helper not reachable — skipping import");
+    return;
+  }
+  const seen = new Set(state.importedKeys);
+  const fresh = (data.todos || []).filter(it => it.text && !seen.has(importKey(it)));
+  if (fresh.length) showImportBanner(fresh);
+  else $("#importBanner").classList.add("hidden");
+}
+
+// Review banner: preview the new lines with one-click "Add all" / "Dismiss".
+function showImportBanner(items) {
+  const banner = $("#importBanner");
+  banner.innerHTML = "";
+
+  const head = el("div", "imp-head", `📥 ${items.length} new todo${items.length === 1 ? "" : "s"} from Notes`);
+  banner.appendChild(head);
+
+  const list = el("div", "imp-list");
+  items.slice(0, 8).forEach(it => {
+    const row = el("div", "imp-item");
+    row.appendChild(document.createTextNode(it.text));
+    if (it.noteTitle) row.appendChild(el("span", "imp-src", " · " + it.noteTitle));
+    list.appendChild(row);
+  });
+  if (items.length > 8) list.appendChild(el("div", "imp-item imp-more", `…and ${items.length - 8} more`));
+  banner.appendChild(list);
+
+  const actions = el("div", "imp-actions");
+  // Work is the default (primary button); Private is one click away, so the
+  // owner decides per batch and the Work/Private split is never crossed silently.
+  const addWork = el("button", "btn primary", `💼 Add to Work (${items.length})`);
+  addWork.onclick = () => { importTodos(items, "work"); banner.classList.add("hidden"); };
+  const addPriv = el("button", "btn", "🏠 Add to Private");
+  addPriv.onclick = () => { importTodos(items, "private"); banner.classList.add("hidden"); };
+  const dismiss = el("button", "btn ghost", "Dismiss");
+  // Dismiss only hides — nothing is marked imported, so it reappears on the next check.
+  dismiss.onclick = () => banner.classList.add("hidden");
+  actions.appendChild(addWork);
+  actions.appendChild(addPriv);
+  actions.appendChild(dismiss);
+  banner.appendChild(actions);
+
+  banner.classList.remove("hidden");
+}
+
+// Create the todos in the chosen scope's Inbox, record their keys, and land there.
+function importTodos(items, scope) {
+  const inbox = ensureInboxArea(scope);
+  const seen = new Set(state.importedKeys);
+  items.forEach(it => {
+    const key = importKey(it);
+    if (seen.has(key)) return;
+    state.todos.unshift({
+      id: uid(), title: it.text, areaId: inbox.id, projectId: null,
+      prio: 1, due: "", est: null, star: false, longterm: false,
+      notes: it.noteTitle ? "From Notes: " + it.noteTitle : "",
+      done: false, createdAt: Date.now(), groupId: null,
+      source: { noteId: it.noteId, text: it.text }
+    });
+    state.importedKeys.push(key);
+    seen.add(key);
+  });
+  // Land on the chosen scope's Inbox so the owner sees what just arrived.
+  ui.mode = state.mode = scope;
+  ui.view = "area"; ui.areaId = inbox.id; ui.projectId = null;
+  render();
+}
+
+/* ============================ Utils ============================ */
+function escapeHtml(s) { return String(s).replace(/[&<>]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c])); }
+function escapeAttr(s) { return String(s).replace(/["&<>]/g, c => ({ '"': "&quot;", "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c])); }
+
+/* ============================ Wire up ============================ */
+$("#quickAdd").addEventListener("keydown", e => {
+  if (e.key === "Enter") { addTodo(e.target.value); e.target.value = ""; }
+});
+$("#modeToggle").querySelectorAll("button").forEach(b => b.addEventListener("click", () => setMode(b.dataset.mode)));
+$("#sortSel").addEventListener("change", e => { ui.sort = e.target.value; renderList(); });
+$("#groupSel").addEventListener("change", e => { ui.group = e.target.value; renderList(); });
+$("#newGroupBtn").addEventListener("click", () => newGroup());
+$("#addAreaBtn").addEventListener("click", addArea);
+$("#checkNotesBtn").addEventListener("click", checkNotes);
+$("#exportBtn").addEventListener("click", exportData);
+$("#importBtn").addEventListener("click", () => $("#importFile").click());
+$("#importFile").addEventListener("change", e => { if (e.target.files[0]) importData(e.target.files[0]); e.target.value = ""; });
+
+$("#drawerClose").addEventListener("click", closeDrawer);
+$("#scrim").addEventListener("click", closeDrawer);
+$("#deleteBtn").addEventListener("click", () => {
+  if (ui.openGroupId) { const g = currentGroup(); if (g) deleteGroup(g); return; }
+  const t = currentTodo(); if (!t) return;
+  if (confirm("Delete this todo?")) { state.todos = state.todos.filter(x => x.id !== t.id); closeDrawer(); render(); }
+});
+$("#doneBtn").addEventListener("click", () => { const t = currentTodo(); if (t) { toggleDone(t); renderDrawer(); } });
+$("#starBtn").addEventListener("click", () => { const t = currentTodo(); if (t) { t.star = !t.star; renderDrawer(); render(); } });
+document.addEventListener("keydown", e => { if (e.key === "Escape") { closePop(); closeDrawer(); } });
+
+// Reflect the initial ui state on the toolbar controls (e.g. Group defaults to Project).
+$("#sortSel").value = ui.sort;
+$("#groupSel").value = ui.group;
+
+render();
+// On open, quietly check the optional Notes helper (silent if it isn't running).
+checkNotes();
+</script>
+</body>
+</html>
