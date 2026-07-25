@@ -40,6 +40,13 @@ Two ways to edit, both re-render via `render()`:
 - **Export / Import** (JSON) is the backup mechanism and the intended migration path to a future synced version.
 - **Dev safety net (Tier 1):** the pure business rules live in `logic.js` (a classic `<script src>` the browser loads *before* the inline script, so they're plain globals exactly as before; also `require`-able in Node via a `module.exports` guard at the bottom). Exported rules: `noFilters, uid, todayISO, daysUntil, fmtDue, fmtEst, isQuickWin, LONGTERM_DAYS, isLongTerm, FILTERS, passesFilters, smartScore, groupScore, sortTodos, migrate`. Three were made **pure** so they take an explicit arg instead of reading `ui`/`state`: `passesFilters(t, filters)`, `sortTodos(list, sortMode)`, `groupScore(g, tasks)` — `todos.html` passes `ui.filters` / `ui.sort` / `groupTasks(id)` at the call site. `npm run check` runs ESLint + `tsc --noEmit` (JSDoc check-JS, **no build**) + `node --test` (`logic.test.js`) as one green gate — run it before declaring a change done. The toolbox (`package.json`, `tsconfig.json`, `eslint.config.js`, `node_modules/`) is **dev-only**; the app itself still opens by double-clicking `todos.html` with zero dependencies. Render/UI JS and CSS are **not** yet extracted (Tiers 2 & 3, deferred).
 
+## Working in git
+
+- **Remote:** `github.com/flgrieger/todo-organizer`. **GitHub Pages serves the live app from `main`**, so a broken `main` = a broken app on the owner's iPhone. Keeping `main` green is the whole point of the guardrails below.
+- **Branch → PR → green CI → merge.** Never commit straight to `main`. Do work on a feature branch (`feat/…`, `fix/…`, `docs/…`), open a PR into `main`, and merge only once CI is green. `main` is protected on GitHub (PR required + the **check** status check must pass); the owner can bypass in a genuine pinch as repo admin.
+- **CI:** `.github/workflows/ci.yml` runs `npm run check` (the same lint + type-check + test gate) on every push and PR to `main`. Still run `npm run check` locally before declaring a change done — CI is the backstop, not a substitute.
+- **Pushing:** Claude commits, the **owner pushes** (`git push …`) — this environment can't reach the Mac's `credential-osxkeychain`, so pushes must run from the owner's own terminal/VS Code as the personal account `flgrieger`.
+
 ## Apple Notes import (optional)
 
 - A separate, optional helper (`notes-helper/notes_helper.py`, Python 3 stdlib only) runs on the owner's Mac, reads a chosen Apple Notes folder **read-only**, and serves `TODO:` lines as JSON at `http://localhost:8787/todos`. See `notes-helper/README.md`.

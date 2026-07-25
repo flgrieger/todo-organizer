@@ -1,0 +1,21 @@
+name: check
+
+# Runs the same green gate as `npm run check` (lint + type-check + tests),
+# automatically on every push and every pull request that targets main.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run check
