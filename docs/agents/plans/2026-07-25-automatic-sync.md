@@ -4,7 +4,7 @@ git_commit: f467469d1851eaa58087f9b89fd18d3b3b4c0549
 branch: docs/auto-sync-spec
 topic: "Automatic cross-device sync (iPhone ↔ Mac) via a tiny Cloudflare store"
 tags: [plan, sync, cloudflare, worker, kv, offline-first, localStorage]
-status: draft
+status: ready
 ---
 
 # PLAN: Automatic cross-device sync via a tiny Cloudflare store
@@ -335,9 +335,8 @@ edits reconcile safely on reconnect.
 
 During implementation, document user feedback, problems, and decisions here.
 
-- **Status: draft.** This plan was authored from the approved brainstorming design without the
-  interactive plan-review step. The owner should review it (phase scoping, the ~5s poll interval,
-  the Sync-panel wording) before implementation; flip `status: ready` once approved.
+- **Status: ready.** Reviewed and approved by the owner on 2026-07-25 (phase scoping, the ~5s poll
+  interval, and Sync-panel/conflict-banner wording all confirmed). Cleared for implementation.
 
 ## References
 
