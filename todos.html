@@ -291,6 +291,16 @@
   .group-cluster .todo { background: var(--panel); }
   .group-empty { padding: 2px 10px 8px; color: var(--ink-faint); font-size: 12.5px; }
   .chip.group-tag { background: #eef0ec; color: var(--ink-soft); font-weight: 600; }
+  .group-head-card .g-add-btn {
+    margin-left: 4px; flex: none; width: 24px; height: 24px; border-radius: 6px;
+    border: 1px solid var(--line); background: var(--panel); color: var(--ink-soft);
+    font-size: 16px; line-height: 1; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .group-head-card .g-add-btn:hover { border-color: var(--accent); color: var(--forest); background: var(--accent-soft); }
+  .cluster-add { display: flex; align-items: center; gap: 8px; padding: 2px 10px 8px; }
+  .cluster-add .cluster-add-plus { color: var(--ink-faint); }
+  .cluster-add input { flex: 1; border: none; border-bottom: 1px dashed var(--line-strong); background: none; outline: none; padding: 4px 2px; font: inherit; color: inherit; }
 
   .empty { text-align: center; color: var(--ink-faint); padding: 70px 20px; }
   .empty .big { font-size: 34px; margin-bottom: 10px; }
@@ -550,7 +560,7 @@ const NOTES_HELPER_URL = "http://localhost:8787/todos";
 const INBOX_AREA_NAME = "Inbox";
 
 let state = load();
-let ui = { view: "all", areaId: null, projectId: null, sort: "smart", group: "project", openId: null, openGroupId: null, filters: noFilters(), mode: state.mode || "work" };
+let ui = { view: "all", areaId: null, projectId: null, sort: "smart", group: "project", openId: null, openGroupId: null, filters: noFilters(), mode: state.mode || "work", addTaskGroupId: null };
 
 // Signature of the REAL data only (view prefs like mode/sort/filter are excluded), so
 // updatedAt bumps on genuine edits — not on merely opening the app or changing the view.
@@ -941,6 +951,12 @@ function renderList() {
       g.items.forEach(t => wrap.appendChild(todoCard(t, { showGroupTag: true })));
     });
   }
+
+  // Keep the inline set-add input focused across re-renders so several tasks flow in a row.
+  if (ui.addTaskGroupId) {
+    const i = document.getElementById("clusterAddInput");
+    if (i) i.focus();
+  }
 }
 
 // Build the browse-view units: each ungrouped todo is its own unit; each set becomes one
@@ -1116,7 +1132,33 @@ function groupCluster(group, tasks) {
   bar.appendChild(el("span", "frac", `${prog.done}/${prog.total}`));
   head.appendChild(bar);
   head.onclick = () => openGroupDrawer(group.id);
+  if (!allDone) {
+    const addBtn = el("button", "g-add-btn", "+");
+    addBtn.title = "Add a task to this set";
+    addBtn.onclick = e => { e.stopPropagation(); toggleAddTask(group.id); };
+    head.appendChild(addBtn);
+  }
   wrap.appendChild(head);
+
+  if (!allDone && ui.addTaskGroupId === group.id) {
+    const addRow = el("div", "cluster-add");
+    addRow.appendChild(el("span", "cluster-add-plus", "+"));
+    const inp = el("input");
+    inp.id = "clusterAddInput";
+    inp.placeholder = "Add a task and press Enter…";
+    inp.onkeydown = e => {
+      if (e.key === "Enter" && inp.value.trim()) { addTaskToGroup(group.id, inp.value.trim()); }
+      else if (e.key === "Escape") { ui.addTaskGroupId = null; renderList(); }
+    };
+    // Click-away closes it — but ignore the blur that fires when we re-render after an add
+    // (focus lands back on the freshly-rendered input within the timeout).
+    inp.onblur = () => setTimeout(() => {
+      const a = document.activeElement;
+      if (!a || a.id !== "clusterAddInput") { ui.addTaskGroupId = null; renderList(); }
+    }, 120);
+    addRow.appendChild(inp);
+    wrap.appendChild(addRow);
+  }
 
   tasks.forEach(t => wrap.appendChild(todoCard(t, { inCluster: true })));
   if (!tasks.length) {
@@ -1345,6 +1387,21 @@ function toggleDone(t) {
     if (g && isGroupComplete(g, groupTasks(g.id))) startGroupCelebration(g.id);
   }
   render();
+}
+
+// Inline "+" on a set cluster: open/close a one-line add row, and add a task into the set.
+function toggleAddTask(gid) {
+  ui.addTaskGroupId = ui.addTaskGroupId === gid ? null : gid;
+  renderList();
+  const i = document.getElementById("clusterAddInput");
+  if (i) i.focus();
+}
+function addTaskToGroup(gid, title) {
+  const g = groupById(gid);
+  if (!g) return;
+  state.todos.unshift({ id: uid(), title, areaId: g.areaId, projectId: g.projectId,
+    prio: 1, due: "", est: null, star: false, longterm: false, notes: "", done: false, createdAt: Date.now(), groupId: gid });
+  render();               // render() persists via save(); ui.addTaskGroupId stays set so the row reopens
 }
 
 function addTodo(title) {
@@ -1750,7 +1807,7 @@ function importData(file) {
       if (!confirm(msg)) return;
       state = migrate(data);
       lastSig = contentSig(state);   // preserve the imported stamp; next save() sees no change
-      ui = { view: "all", areaId: null, projectId: null, sort: ui.sort, group: ui.group, openId: null, openGroupId: null, filters: noFilters(), mode: state.mode || "work" };
+      ui = { view: "all", areaId: null, projectId: null, sort: ui.sort, group: ui.group, openId: null, openGroupId: null, filters: noFilters(), mode: state.mode || "work", addTaskGroupId: null };
       render();
     } catch (e) { alert("Could not read that file. Make sure it's a backup exported from this app."); }
   };
