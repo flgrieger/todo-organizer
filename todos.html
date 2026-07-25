@@ -875,7 +875,10 @@ function renderList() {
   const browse = ui.view === "all" || ui.view === "area";
   // Empty/just-created sets normally show, but a filter is a "narrow down" — sets with no
   // matching task should disappear like any other empty block.
-  const relGroups = (browse && !anyFilterActive()) ? groupsInView() : [];
+  // A fully-done set retires from the active list — keep it only during its brief celebration.
+  const relGroups = (browse && !anyFilterActive())
+    ? groupsInView().filter(g => !isGroupComplete(g, groupTasks(g.id)) || celebratingGroups.has(g.id))
+    : [];
 
   if (!list.length && !relGroups.length) {
     const e = el("div", "empty");
@@ -1272,9 +1275,29 @@ function editLoc(anchor, t) {
 }
 
 /* ============================ Actions ============================ */
+// A set that just had its last task ticked celebrates ("✓ All tasks complete") for a beat,
+// then drops out of the active/browse list. Transient (module-level), never persisted.
+const celebratingGroups = new Set();
+const celebrationTimers = {};
+const CELEBRATE_MS = 2500;
+function startGroupCelebration(gid) {
+  if (celebrationTimers[gid]) clearTimeout(celebrationTimers[gid]);
+  celebratingGroups.add(gid);
+  celebrationTimers[gid] = setTimeout(() => {
+    celebratingGroups.delete(gid);
+    delete celebrationTimers[gid];
+    render();
+  }, CELEBRATE_MS);
+}
+
 function toggleDone(t) {
   t.done = !t.done;
   t.completedAt = t.done ? Date.now() : null;
+  // If this tick just completed a set, celebrate briefly before it leaves the active list.
+  if (t.done && t.groupId) {
+    const g = groupById(t.groupId);
+    if (g && isGroupComplete(g, groupTasks(g.id))) startGroupCelebration(g.id);
+  }
   render();
 }
 
