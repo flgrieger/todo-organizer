@@ -48,7 +48,9 @@
   button:focus-visible, a:focus-visible { outline: 2px solid var(--forest); outline-offset: 2px; border-radius: 6px; }
   @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 
-  .app { display: grid; grid-template-columns: 248px 1fr; height: 100vh; }
+  /* 100dvh follows the *dynamic* viewport so mobile browser chrome (address/tab bars) can't
+     crop the app; the 100vh line before it is the fallback for browsers without dvh. */
+  .app { display: grid; grid-template-columns: 248px 1fr; height: 100vh; height: 100dvh; }
 
   /* ---------- Sidebar ---------- */
   .sidebar {
@@ -85,13 +87,16 @@
   .nav-item.active .count { color: var(--forest); }
   .nav-item .dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
   .last-changed { font-size: 11px; color: var(--ink-faint); padding: 8px 8px 0; }
-  .nav-item .area-move {
-    margin-left: auto; font-size: 13px; color: var(--ink-faint); padding: 0 4px;
-    opacity: 0; border-radius: 5px; transition: opacity .12s;
+  /* ⋮ per-row action menu (areas + projects), visible on both desktop and touch — replaces the
+     old hover-only "⇄" move and the hidden right-click rename. Faint until hovered; enlarged and
+     fully opaque on mobile (see the media query) so it's an obvious tap target. */
+  .nav-item .row-menu {
+    font-size: 16px; color: var(--ink-faint); padding: 0 6px; margin-left: 2px;
+    border-radius: 6px; opacity: .55; line-height: 1; flex: none;
+    transition: opacity .12s, color .12s, background .12s;
   }
-  .nav-item:hover .area-move { opacity: 1; }
-  .nav-item .area-move:hover { color: var(--forest); background: var(--accent-soft); }
-  .nav-item .area-move + .count { margin-left: 4px; }
+  .nav-item:hover .row-menu { opacity: 1; }
+  .nav-item .row-menu:hover { opacity: 1; color: var(--forest); background: var(--accent-soft); }
   .nav-sub { padding-left: 8px; }
 
   /* ---------- Main ---------- */
@@ -294,7 +299,7 @@
   .scrim { position: fixed; inset: 0; background: rgba(20,22,26,.28); opacity: 0; pointer-events: none; transition: opacity .18s; z-index: 40; }
   .scrim.open { opacity: 1; pointer-events: auto; }
   .drawer {
-    position: fixed; top: 0; right: 0; height: 100vh; width: 400px; max-width: 92vw;
+    position: fixed; top: 0; right: 0; height: 100vh; height: 100dvh; width: 400px; max-width: 92vw;
     background: var(--panel); border-left: 1px solid var(--line);
     box-shadow: -10px 0 40px rgba(0,0,0,.12); z-index: 50;
     transform: translateX(100%); transition: transform .2s ease;
@@ -344,9 +349,81 @@
   input[type=color] { display: none; }
   .hidden { display: none !important; }
 
+  /* ---------- Mobile navigation: view-chip strip + ⋯ bottom sheet ---------- */
+  /* All hidden on desktop (the sidebar is the desktop nav); revealed under the 720px
+     breakpoint below. The sidebar stays the single source that renderNav() renders into
+     alongside these, so desktop + mobile navigation never drift apart. */
+  .nav-toggle {
+    display: none; border: 1px solid var(--line-strong); background: var(--panel);
+    color: var(--ink-soft); border-radius: var(--radius-sm); padding: 6px 12px;
+    font-size: 18px; line-height: 1; align-items: center; flex: none;
+  }
+  .nav-toggle:hover { border-color: var(--forest); color: var(--forest); }
+
+  .view-chips {
+    display: none; gap: 8px; padding: 10px 16px; overflow-x: auto;
+    -webkit-overflow-scrolling: touch; border-bottom: 1px solid var(--line); background: var(--panel);
+  }
+  .view-chip {
+    display: inline-flex; align-items: center; gap: 6px; flex: none; white-space: nowrap;
+    border: 1px solid var(--line-strong); background: var(--panel); color: var(--ink-soft);
+    border-radius: 999px; padding: 8px 14px; font-size: 13px; font-weight: 500;
+  }
+  .view-chip.active { background: var(--accent-soft); border-color: var(--accent); color: var(--forest); font-weight: 600; }
+  .view-chip .ico { font-size: 13px; }
+  .view-chip .count { font-size: 11.5px; color: var(--ink-faint); font-weight: 500; }
+  .view-chip.active .count { color: var(--forest); }
+
+  .nav-sheet {
+    display: none; position: fixed; left: 0; right: 0; bottom: 0; z-index: 50;
+    background: var(--panel); border-top: 1px solid var(--line); border-radius: 18px 18px 0 0;
+    box-shadow: 0 -10px 40px rgba(22,51,0,.15); transform: translateY(100%);
+    transition: transform .2s ease; max-height: 82vh; flex-direction: column;
+  }
+  .nav-sheet.open { transform: translateY(0); }
+  .nav-sheet-handle { width: 40px; height: 4px; border-radius: 3px; background: var(--line-strong); margin: 10px auto 6px; flex: none; }
+  .nav-sheet-body { overflow-y: auto; padding: 4px 14px 20px; }
+
   @media (max-width: 720px) {
     .app { grid-template-columns: 1fr; }
     .sidebar { display: none; }
+    .nav-toggle { display: inline-flex; }
+    .view-chips { display: flex; }
+    .nav-sheet { display: flex; }
+    /* The ⋮ is the only way to manage areas on touch — keep it always visible + easy to hit. */
+    .nav-item .row-menu { opacity: 1; padding: 8px 10px; font-size: 18px; }
+
+    /* Reclaim the generous desktop side padding so cards + controls aren't cramped at ~390px. */
+    .topbar, .toolbar, .filterbar, .list-wrap { padding-left: 16px; padding-right: 16px; }
+    .imp-banner { margin-left: 16px; margin-right: 16px; }
+
+    /* Toolbar wraps: quick-add takes the whole first line; Sort / Arrange / New set wrap beneath. */
+    .toolbar { flex-wrap: wrap; }
+    .quickadd { flex: 1 0 100%; }
+
+    /* Comfortable tap targets (~44px) — grow padding, not font, where the visual must stay small. */
+    .todo { padding: 14px; gap: 14px; }
+    .check { width: 26px; height: 26px; }
+    .t-meta .chip { padding: 6px 11px; }
+    .nav-item { padding: 10px 8px; }
+    select.control, .btn { padding: 10px 13px; }
+    .fb-chip { padding: 9px 14px; }
+
+    /* iOS auto-zooms the page when a focused input renders < 16px — pin form inputs to 16px. */
+    .quickadd input,
+    .pop input[type=date], .pop input[type=number],
+    .field input[type=text], .field textarea, .field select,
+    .field input[type=date], .field input[type=number] { font-size: 16px; }
+
+    /* Detail drawer fills the phone screen; its foot buttons stay reachable at the bottom. */
+    .drawer { width: 100%; max-width: 100%; }
+
+    /* Keep the topbar row (mode toggle · title · ⋯) from overflowing on small phones so the ⋯
+       never scrolls off-screen: compact the toggle + gap, and let a long title ellipsis-truncate. */
+    .topbar { gap: 10px; }
+    .topbar-title { min-width: 0; }
+    .topbar h1 { font-size: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .mode-toggle button { padding: 9px 14px; }
   }
 </style>
 </head>
@@ -370,11 +447,7 @@
 
     <div class="nav-group" style="margin-top:auto;">
       <div class="nav-label">Data</div>
-      <button class="nav-item" id="checkNotesBtn"><span class="ico">📥</span> Check Notes</button>
-      <button class="nav-item" id="exportBtn"><span class="ico">⬇</span> Export backup</button>
-      <button class="nav-item" id="importBtn"><span class="ico">⬆</span> Import backup</button>
-      <input type="file" id="importFile" accept="application/json" class="hidden" />
-      <div id="lastChanged" class="last-changed"></div>
+      <div id="dataNav"></div>
     </div>
   </aside>
 
@@ -386,12 +459,15 @@
         <button data-mode="private"><span class="ic">🏠</span> Private</button>
       </div>
       <div class="mode-div"></div>
-      <div>
+      <div class="topbar-title">
         <h1 id="viewTitle">All active</h1>
         <div class="sub" id="viewSub"></div>
       </div>
       <div class="spacer"></div>
+      <button class="nav-toggle" id="navToggle" title="Menu" aria-label="Open menu">⋯</button>
     </div>
+
+    <div class="view-chips" id="viewChips"></div>
 
     <div class="toolbar">
       <div class="quickadd">
@@ -435,6 +511,23 @@
     <button class="btn danger" id="deleteBtn">Delete</button>
     <div style="flex:1"></div>
     <button class="btn primary" id="doneBtn">Mark done</button>
+  </div>
+</aside>
+
+<!-- Mobile navigation bottom sheet (Areas + Data). Its own scrim so it dismisses
+     independently of the detail drawer. Populated by renderAreas/renderData. -->
+<div class="scrim" id="navScrim"></div>
+<aside class="nav-sheet" id="navSheet">
+  <div class="nav-sheet-handle"></div>
+  <div class="nav-sheet-body">
+    <div class="nav-group">
+      <div class="nav-label">Areas</div>
+      <div id="areaNavSheet"></div>
+    </div>
+    <div class="nav-group">
+      <div class="nav-label">Data</div>
+      <div id="dataNavSheet"></div>
+    </div>
   </div>
 </aside>
 
@@ -614,10 +707,11 @@ function render() {
   updateFreshness();   // after save(): reads the just-bumped state.updatedAt (off-by-one otherwise)
 }
 
-// Sidebar "Last changed …" line, so the owner can judge how fresh this device is before syncing.
+// "Last changed …" line (sidebar + mobile sheet), so the owner can judge how fresh this device
+// is before syncing. renderData builds a .last-changed per instance; fill them all.
 function updateFreshness() {
-  const elm = $("#lastChanged");
-  if (elm) elm.textContent = state.updatedAt ? "Last changed " + fmtRelative(state.updatedAt) : "";
+  const txt = state.updatedAt ? "Last changed " + fmtRelative(state.updatedAt) : "";
+  document.querySelectorAll(".last-changed").forEach(elm => { elm.textContent = txt; });
 }
 
 function renderFilterBar() {
@@ -636,60 +730,122 @@ function renderFilterBar() {
   }
 }
 
+// renderNav is a thin conductor: it themes the app + toggle, then runs the three section
+// renderers into BOTH the desktop sidebar containers AND the mobile chip-strip / bottom-sheet
+// containers in one pass, so the two navigations can never drift out of sync.
 function renderNav() {
   // Reflect the active mode on the toggle + theme the app
   document.body.dataset.mode = ui.mode;
   $("#modeToggle").querySelectorAll("button").forEach(b => b.classList.toggle("active", b.dataset.mode === ui.mode));
 
-  // Views (counts are scoped to the current mode)
-  const vn = $("#viewNav"); vn.innerHTML = "";
-  VIEWS.forEach(v => {
-    const count = state.todos.filter(t => inMode(t) && v.filter(t) && (!HIDE_LT.has(v.id) || !isLongTerm(t))).length;
-    const b = el("button", "nav-item" + (ui.view === v.id ? " active" : ""));
-    b.innerHTML = `<span class="ico">${v.icon}</span> ${v.label}`;
-    if (v.id !== "done") { const c = el("span", "count", count); b.appendChild(c); }
-    b.onclick = () => { ui.view = v.id; ui.areaId = null; ui.projectId = null; render(); };
-    vn.appendChild(b);
-  });
+  renderViews({ box: $("#viewNav") }, { box: $("#viewChips"), chip: true });
+  renderAreas({ box: $("#areaNav") }, { box: $("#areaNavSheet"), addArea: true });
+  renderData($("#dataNav"), $("#dataNavSheet"));
+}
 
-  // Areas + projects (only those belonging to the current mode)
-  const an = $("#areaNav"); an.innerHTML = "";
-  const modeAreas = state.areas.filter(a => a.scope === ui.mode);
-  if (!modeAreas.length) {
-    an.appendChild(el("div", "", "")).style.cssText = "padding:2px 8px;color:var(--ink-faint);font-size:12.5px";
-    an.lastChild.textContent = "No areas yet — use + above.";
-  }
-  modeAreas.forEach(area => {
-    const cnt = state.todos.filter(t => t.areaId === area.id && !t.done).length;
-    const b = el("button", "nav-item" + (ui.view === "area" && ui.areaId === area.id && !ui.projectId ? " active" : ""));
-    const dot = el("span", "dot"); dot.style.background = area.color;
-    b.appendChild(dot); b.appendChild(document.createTextNode(area.name));
-    const mv = el("span", "area-move", "⇄");
-    mv.title = "Move to " + (ui.mode === "work" ? "Private" : "Work");
-    mv.onclick = e => { e.stopPropagation(); moveAreaScope(area); };
-    b.appendChild(mv);
-    const c = el("span", "count", cnt); b.appendChild(c);
-    b.onclick = () => { ui.view = "area"; ui.areaId = area.id; ui.projectId = null; render(); };
-    b.oncontextmenu = e => { e.preventDefault(); renameArea(area); };
-    an.appendChild(b);
-
-    const projs = state.projects.filter(p => p.areaId === area.id);
-    projs.forEach(p => {
-      const pc = state.todos.filter(t => t.projectId === p.id && !t.done).length;
-      const pb = el("button", "nav-item nav-sub" + (ui.projectId === p.id ? " active" : ""));
-      pb.innerHTML = `<span class="ico" style="font-size:11px;color:var(--ink-faint)">›</span> ${escapeHtml(p.name)}`;
-      const c2 = el("span", "count", pc); pb.appendChild(c2);
-      pb.onclick = () => { ui.view = "area"; ui.areaId = area.id; ui.projectId = p.id; render(); };
-      pb.oncontextmenu = e => { e.preventDefault(); renameProject(p); };
-      an.appendChild(pb);
+// The VIEWS buttons (counts scoped to the current mode). Rendered as sidebar nav-items and,
+// with { chip:true }, as pill buttons in the mobile top strip — identical data + handler.
+function renderViews(...targets) {
+  targets.forEach(({ box, chip }) => {
+    if (!box) return;
+    box.innerHTML = "";
+    VIEWS.forEach(v => {
+      const count = state.todos.filter(t => inMode(t) && v.filter(t) && (!HIDE_LT.has(v.id) || !isLongTerm(t))).length;
+      const b = el("button", (chip ? "view-chip" : "nav-item") + (ui.view === v.id ? " active" : ""));
+      b.innerHTML = `<span class="ico">${v.icon}</span> ${escapeHtml(v.label)}`;
+      if (v.id !== "done") b.appendChild(el("span", "count", count));
+      b.onclick = () => { ui.view = v.id; ui.areaId = null; ui.projectId = null; closeNavSheet(); render(); };
+      box.appendChild(b);
     });
-
-    const addP = el("button", "nav-item nav-sub", null);
-    addP.innerHTML = `<span class="ico" style="color:var(--ink-faint)">+</span> <span style="color:var(--ink-faint)">Add project</span>`;
-    addP.onclick = () => addProject(area.id);
-    an.appendChild(addP);
   });
 }
+
+// Areas + their projects + "Add project" (and, with { addArea:true }, an "Add area" trigger so
+// the mobile sheet has its own — the sidebar keeps its header "+" #addAreaBtn). Identical DOM
+// into each target. Selecting anything closes the mobile sheet (a no-op on desktop).
+function renderAreas(...targets) {
+  const modeAreas = state.areas.filter(a => a.scope === ui.mode);
+  targets.forEach(({ box, addArea: withAdd }) => {
+    if (!box) return;
+    box.innerHTML = "";
+    if (!modeAreas.length) {
+      const empty = el("div", "", "No areas yet — use + above.");
+      empty.style.cssText = "padding:2px 8px;color:var(--ink-faint);font-size:12.5px";
+      box.appendChild(empty);
+    }
+    modeAreas.forEach(area => {
+      const cnt = state.todos.filter(t => t.areaId === area.id && !t.done).length;
+      const b = el("button", "nav-item" + (ui.view === "area" && ui.areaId === area.id && !ui.projectId ? " active" : ""));
+      const dot = el("span", "dot"); dot.style.background = area.color;
+      b.appendChild(dot); b.appendChild(document.createTextNode(area.name));
+      b.appendChild(el("span", "count", cnt));
+      const menu = el("span", "row-menu", "⋮");
+      menu.title = "Area options";
+      menu.onclick = e => { e.stopPropagation(); areaMenu(area, menu); };
+      b.appendChild(menu);
+      b.onclick = () => { ui.view = "area"; ui.areaId = area.id; ui.projectId = null; closeNavSheet(); render(); };
+      box.appendChild(b);
+
+      state.projects.filter(p => p.areaId === area.id).forEach(p => {
+        const pc = state.todos.filter(t => t.projectId === p.id && !t.done).length;
+        const pb = el("button", "nav-item nav-sub" + (ui.projectId === p.id ? " active" : ""));
+        pb.innerHTML = `<span class="ico" style="font-size:11px;color:var(--ink-faint)">›</span> ${escapeHtml(p.name)}`;
+        pb.appendChild(el("span", "count", pc));
+        const pmenu = el("span", "row-menu", "⋮");
+        pmenu.title = "Project options";
+        pmenu.onclick = e => { e.stopPropagation(); projectMenu(p, pmenu); };
+        pb.appendChild(pmenu);
+        pb.onclick = () => { ui.view = "area"; ui.areaId = area.id; ui.projectId = p.id; closeNavSheet(); render(); };
+        box.appendChild(pb);
+      });
+
+      const addP = el("button", "nav-item nav-sub", null);
+      addP.innerHTML = `<span class="ico" style="color:var(--ink-faint)">+</span> <span style="color:var(--ink-faint)">Add project</span>`;
+      addP.onclick = () => { closeNavSheet(); addProject(area.id); };
+      box.appendChild(addP);
+    });
+    if (withAdd) {
+      const addA = el("button", "nav-item", null);
+      addA.innerHTML = `<span class="ico" style="color:var(--ink-faint)">+</span> <span style="color:var(--ink-faint)">Add area</span>`;
+      addA.onclick = () => { closeNavSheet(); addArea(); };
+      box.appendChild(addA);
+    }
+  });
+}
+
+// Data actions (Check Notes / Export / Import) + the "last changed" line, built with handlers
+// attached per instance (classes, not IDs) so the same block works in the sidebar AND the sheet —
+// duplicating the old #importFile/#exportBtn IDs would have broken $("#importFile").click().
+function renderData(...boxes) {
+  boxes.forEach(box => {
+    if (!box) return;
+    box.innerHTML = "";
+
+    const check = el("button", "nav-item");
+    check.innerHTML = `<span class="ico">📥</span> Check Notes`;
+    check.onclick = () => { closeNavSheet(); checkNotes(); };
+    box.appendChild(check);
+
+    const exp = el("button", "nav-item");
+    exp.innerHTML = `<span class="ico">⬇</span> Export backup`;
+    exp.onclick = () => { closeNavSheet(); exportData(); };
+    box.appendChild(exp);
+
+    const imp = el("button", "nav-item");
+    imp.innerHTML = `<span class="ico">⬆</span> Import backup`;
+    const file = el("input"); file.type = "file"; file.accept = "application/json"; file.className = "hidden";
+    file.onchange = e => { closeNavSheet(); if (e.target.files[0]) importData(e.target.files[0]); e.target.value = ""; };
+    imp.onclick = () => file.click();
+    box.appendChild(imp); box.appendChild(file);
+
+    box.appendChild(el("div", "last-changed"));
+  });
+}
+
+// Mobile "⋯" bottom sheet — Areas + Data. Its own scrim (#navScrim) dismisses it independently
+// of the detail drawer. No-ops harmlessly on desktop, where the sheet is never open.
+function openNavSheet() { $("#navScrim").classList.add("open"); $("#navSheet").classList.add("open"); }
+function closeNavSheet() { $("#navScrim").classList.remove("open"); $("#navSheet").classList.remove("open"); }
 
 // Groups that belong to the current browse view (used to place clusters, incl. empties).
 function groupsInView() {
@@ -1166,14 +1322,32 @@ function moveAreaScope(area) {
 function renameArea(area) {
   const name = prompt("Rename area (leave empty to delete it and its todos):", area.name);
   if (name === null) return;
-  if (!name.trim()) {
-    if (!confirm(`Delete area "${area.name}", its projects and todos?`)) return;
-    state.projects = state.projects.filter(p => p.areaId !== area.id);
-    state.todos = state.todos.filter(t => t.areaId !== area.id);
-    state.areas = state.areas.filter(a => a.id !== area.id);
-    if (ui.areaId === area.id) { ui.view = "all"; ui.areaId = null; ui.projectId = null; }
-  } else { area.name = name.trim(); }
+  if (!name.trim()) { deleteArea(area); return; }   // empty rename still deletes (keeps the old shortcut)
+  area.name = name.trim();
   render();
+}
+function deleteArea(area) {
+  if (!confirm(`Delete area "${area.name}", its projects and todos?`)) return;
+  state.projects = state.projects.filter(p => p.areaId !== area.id);
+  state.todos = state.todos.filter(t => t.areaId !== area.id);
+  state.areas = state.areas.filter(a => a.id !== area.id);
+  if (ui.areaId === area.id) { ui.view = "all"; ui.areaId = null; ui.projectId = null; }
+  render();
+}
+// The ⋮ area menu: Rename / Move to the other mode / Delete — reused on desktop and in the sheet.
+function areaMenu(area, anchor) {
+  openPop(anchor, p => {
+    p.appendChild(el("div", "pop-title", "Area"));
+    const rename = el("button", "opt", "✏️ Rename");
+    rename.onclick = () => { closePop(); renameArea(area); };
+    p.appendChild(rename);
+    const move = el("button", "opt", "⇄ Move to " + (area.scope === "work" ? "Private" : "Work"));
+    move.onclick = () => { closePop(); moveAreaScope(area); };
+    p.appendChild(move);
+    const del = el("button", "opt pop-clear", "🗑 Delete area");
+    del.onclick = () => { closePop(); deleteArea(area); };
+    p.appendChild(del);
+  });
 }
 function addProject(areaId) {
   const name = prompt("New project name:");
@@ -1184,13 +1358,28 @@ function addProject(areaId) {
 function renameProject(p) {
   const name = prompt("Rename project (leave empty to delete it; its todos stay in the area):", p.name);
   if (name === null) return;
-  if (!name.trim()) {
-    if (!confirm(`Delete project "${p.name}"?`)) return;
-    state.todos.forEach(t => { if (t.projectId === p.id) t.projectId = null; });
-    state.projects = state.projects.filter(x => x.id !== p.id);
-    if (ui.projectId === p.id) ui.projectId = null;
-  } else { p.name = name.trim(); }
+  if (!name.trim()) { deleteProject(p); return; }   // empty rename still deletes (keeps the old shortcut)
+  p.name = name.trim();
   render();
+}
+function deleteProject(p) {
+  if (!confirm(`Delete project "${p.name}"?`)) return;
+  state.todos.forEach(t => { if (t.projectId === p.id) t.projectId = null; });
+  state.projects = state.projects.filter(x => x.id !== p.id);
+  if (ui.projectId === p.id) ui.projectId = null;
+  render();
+}
+// The ⋮ project menu: Rename / Delete (projects follow their area, so no Work/Private move).
+function projectMenu(p, anchor) {
+  openPop(anchor, pop => {
+    pop.appendChild(el("div", "pop-title", "Project"));
+    const rename = el("button", "opt", "✏️ Rename");
+    rename.onclick = () => { closePop(); renameProject(p); };
+    pop.appendChild(rename);
+    const del = el("button", "opt pop-clear", "🗑 Delete project");
+    del.onclick = () => { closePop(); deleteProject(p); };
+    pop.appendChild(del);
+  });
 }
 
 /* ============================ Drawer ============================ */
@@ -1607,10 +1796,10 @@ $("#sortSel").addEventListener("change", e => { ui.sort = e.target.value; render
 $("#groupSel").addEventListener("change", e => { ui.group = e.target.value; renderList(); });
 $("#newGroupBtn").addEventListener("click", () => newGroup());
 $("#addAreaBtn").addEventListener("click", addArea);
-$("#checkNotesBtn").addEventListener("click", checkNotes);
-$("#exportBtn").addEventListener("click", exportData);
-$("#importBtn").addEventListener("click", () => $("#importFile").click());
-$("#importFile").addEventListener("change", e => { if (e.target.files[0]) importData(e.target.files[0]); e.target.value = ""; });
+// Data actions (Check Notes / Export / Import) are now wired per-instance inside renderData(),
+// so the sidebar and the mobile sheet each get their own working buttons + file input.
+$("#navToggle").addEventListener("click", openNavSheet);
+$("#navScrim").addEventListener("click", closeNavSheet);
 
 $("#drawerClose").addEventListener("click", closeDrawer);
 $("#scrim").addEventListener("click", closeDrawer);
@@ -1621,7 +1810,7 @@ $("#deleteBtn").addEventListener("click", () => {
 });
 $("#doneBtn").addEventListener("click", () => { const t = currentTodo(); if (t) { toggleDone(t); renderDrawer(); } });
 $("#starBtn").addEventListener("click", () => { const t = currentTodo(); if (t) { t.star = !t.star; renderDrawer(); render(); } });
-document.addEventListener("keydown", e => { if (e.key === "Escape") { closePop(); closeDrawer(); } });
+document.addEventListener("keydown", e => { if (e.key === "Escape") { closePop(); closeDrawer(); closeNavSheet(); } });
 
 // Reflect the initial ui state on the toolbar controls (e.g. Group defaults to Project).
 $("#sortSel").value = ui.sort;

@@ -4,8 +4,14 @@ git_commit: 96fd0268772af2a9b5ddedee5cb21aa120a861df
 branch: main
 topic: "Mobile responsiveness for the phone"
 tags: [plan, todos-html, responsive, mobile, navigation, design-system]
-status: ready
+status: in-progress
 ---
+
+> **Progress (2026-07-25):** All three phases implemented on branch `feat/mobile-responsiveness`.
+> Code + docs done; the agent sandbox has **no Node**, so `npm run check` runs in CI / on the
+> owner's Mac (logic.js untouched → gate unaffected). `git grep` automated checks pass; a
+> regex-aware bracket-balance pass over the inline script is clean. **Manual verification (on the
+> iPhone / at a 390px viewport) is still pending the owner** — see the unchecked boxes below.
 
 # PLAN: Make todos.html usable on a phone
 
@@ -172,7 +178,7 @@ instead surface Views as a top chip strip and Areas + Data in a "⋯" bottom she
 sidebar.
 
 **Tasks**:
-- [ ] Refactor `renderNav()` (`todos.html:639-692`) into three helpers that each accept one or more
+- [x] Refactor `renderNav()` (`todos.html:639-692`) into three helpers that each accept one or more
       target containers and render identical DOM into each:
   - `renderViews(...containers)` — the VIEWS buttons (also used as the mobile chip strip content).
   - `renderAreas(...containers)` — areas + projects + "Add project", and an **"Add area"** trigger
@@ -188,31 +194,31 @@ sidebar.
   - Keep a thin `renderNav()` that calls all three with the desktop sidebar containers **and** the
     new mobile containers, and still sets `document.body.dataset.mode` + the mode-toggle active
     state (`todos.html:640-642`).
-- [ ] Update `updateFreshness()` (`:618-621`) to write the "last changed" text into **every**
+- [x] Update `updateFreshness()` (`:618-621`) to write the "last changed" text into **every**
       `.last-changed` element (sidebar + sheet), not just the first `#lastChanged` — e.g. switch to a
       class selector and `querySelectorAll`.
-- [ ] Add mobile markup: a `#viewChips` strip and a `#navToggle` ("⋯") button. Place the chip strip
+- [x] Add mobile markup: a `#viewChips` strip and a `#navToggle` ("⋯") button. Place the chip strip
       directly under the topbar title and the ⋯ button at the right of the topbar (`.spacer` already
       exists at `todos.html:393`). Both are hidden on desktop via CSS.
-- [ ] Add a `#navSheet` bottom-sheet element (grab handle, "Areas" section = `#areaNavSheet`, "Data"
+- [x] Add a `#navSheet` bottom-sheet element (grab handle, "Areas" section = `#areaNavSheet`, "Data"
       section = `#dataNavSheet`) plus a dedicated scrim `#navScrim`. Model the slide-up transform +
       scrim on the existing `.drawer` / `.scrim` (`todos.html:294-303`).
-- [ ] Add `openNavSheet()` / `closeNavSheet()` and wire `#navToggle`, `#navScrim`, and the Escape
+- [x] Add `openNavSheet()` / `closeNavSheet()` and wire `#navToggle`, `#navScrim`, and the Escape
       handler (extend `todos.html:1624`). Tapping any item inside the sheet that changes the view
       (a view chip is in the top strip, but selecting an area/project or a Data action) closes the
       sheet.
-- [ ] Add CSS under `@media (max-width: 720px)`:
+- [x] Add CSS under `@media (max-width: 720px)`:
   - keep `.app { grid-template-columns: 1fr; }` and `.sidebar { display: none; }` (sidebar stays the
     desktop-only source; mobile uses the strip + sheet);
   - show `#viewChips` (horizontal scroll, `overflow-x:auto`, no wrap) and `#navToggle`;
   - style `.view-chip` as pill buttons with counts, active state = accent-soft (mirror `.fb-chip`).
   - Desktop (>720px): `#viewChips`, `#navToggle`, `#navSheet`, `#navScrim` are `display:none`.
-- [ ] Update `NOTES.md` with a short "Using it on your phone" paragraph (tap the Views chips to
+- [x] Update `NOTES.md` with a short "Using it on your phone" paragraph (tap the Views chips to
       switch view; tap ⋯ for areas + backup).
 
 **Automated Verification**:
 - [ ] `npm run check` passes (lint + typecheck + `node --test`).
-- [ ] `git grep -n "renderNav" todos.html` shows the split helpers are all invoked in the render
+- [x] `git grep -n "renderNav" todos.html` shows the split helpers are all invoked in the render
       path.
 
 **Manual Verification**:
@@ -231,29 +237,29 @@ Replace the mouse-only management affordances with a single visible ⋮ row menu
 and desktop, giving the phone full parity.
 
 **Tasks**:
-- [ ] In `renderAreas(...)`, add a ⋮ button to each **area** row that calls `areaMenu(area)`; remove
+- [x] In `renderAreas(...)`, add a ⋮ button to each **area** row that calls `areaMenu(area)`; remove
       the hover `.area-move` "⇄" span (`todos.html:667-670`) and the `oncontextmenu` rename
       (`:673`).
-- [ ] Add a ⋮ button to each **project** row; remove its `oncontextmenu` rename (`todos.html:683`).
-- [ ] Implement `areaMenu(area)` using `openPop(anchor, build)`:
+- [x] Add a ⋮ button to each **project** row; remove its `oncontextmenu` rename (`todos.html:683`).
+- [x] Implement `areaMenu(area)` using `openPop(anchor, build)`:
   - **Rename** → `renameArea(area)`
   - **Move to Work/Private** (label reflects the target, as `moveAreaScope` already computes) →
     `moveAreaScope(area)`
   - **Delete** → reuse the delete path (invoke `renameArea` which deletes on empty, or factor a small
     `deleteArea(area)` from the existing confirm+delete block at `todos.html:1169-1175` — keep the
     same confirm text). Prefer factoring `deleteArea` so the menu has an explicit Delete item.
-- [ ] Implement `projectMenu(project)` similarly: **Rename** → `renameProject(project)`; **Delete** →
+- [x] Implement `projectMenu(project)` similarly: **Rename** → `renameProject(project)`; **Delete** →
       factor `deleteProject(project)` from `todos.html:1187-1191`. (Projects have no Work/Private
       move — they follow their area.)
-- [ ] Remove the now-unused `.area-move` CSS block (`todos.html:88-94`). Add `.row-menu` (the ⋮
+- [x] Remove the now-unused `.area-move` CSS block (`todos.html:88-94`). Add `.row-menu` (the ⋮
       button) styling: faint by default, full-strength on hover/focus, always visible and ≥40px hit
       area on mobile.
-- [ ] Update `CLAUDE.md` (Editing / Architecture area) and `docs/design-system.md` to state that
+- [x] Update `CLAUDE.md` (Editing / Architecture area) and `docs/design-system.md` to state that
       area/project management is a visible ⋮ menu on every row (right-click and hover-⇄ removed).
 
 **Automated Verification**:
 - [ ] `npm run check` passes.
-- [ ] `git grep -n "oncontextmenu\|area-move" todos.html` returns nothing (both mouse-only
+- [x] `git grep -n "oncontextmenu\|area-move" todos.html` returns nothing (both mouse-only
       affordances are gone).
 
 **Manual Verification**:
@@ -269,29 +275,29 @@ Dependencies: Phase 1 (Phase 2 independent but land after for a clean diff).
 Make the whole surface comfortable one-handed and correct under mobile browser chrome.
 
 **Tasks**:
-- [ ] Toolbar (`todos.html:125-128`, `396-415`): allow `flex-wrap: wrap` under the mobile
+- [x] Toolbar (`todos.html:125-128`, `396-415`): allow `flex-wrap: wrap` under the mobile
       breakpoint so quick-add takes the first line and Sort / Arrange / New set wrap beneath; ensure
       the quick-add stays full-width.
-- [ ] Tap targets under `@media (max-width: 720px)`: bump the checkbox (`.check`, `:194`), card chips
+- [x] Tap targets under `@media (max-width: 720px)`: bump the checkbox (`.check`, `:194`), card chips
       (`.chip`, `:207`), nav/sheet rows, ⋮ buttons, and toolbar controls so their interactive hit
       area is ~44px (increase padding/min-height; keep visual size restrained where needed via
       padding rather than font bloat).
-- [ ] iOS zoom: set form inputs to `font-size: 16px` on mobile — quick-add input (`:135`), `.pop`
+- [x] iOS zoom: set form inputs to `font-size: 16px` on mobile — quick-add input (`:135`), `.pop`
       inputs (`:256`), and `.field` inputs (`:311`). Scope to the media query so desktop density is
       unchanged.
-- [ ] Replace `100vh` with `100dvh` (with a `100vh` fallback line before it) on `.app`
+- [x] Replace `100vh` with `100dvh` (with a `100vh` fallback line before it) on `.app`
       (`todos.html:51`) and `.drawer` (`:297`) so mobile browser chrome doesn't cut off content.
-- [ ] Detail drawer on mobile: make it effectively full-width (e.g. `width: 100%` / keep
+- [x] Detail drawer on mobile: make it effectively full-width (e.g. `width: 100%` / keep
       `max-width: 92vw` behavior sensible) and confirm the drawer foot buttons remain reachable.
-- [ ] Verify the inline chip popover (`openPop`, `todos.html:1006-1027`) still positions on-screen at
+- [x] Verify the inline chip popover (`openPop`, `todos.html:1006-1027`) still positions on-screen at
       phone width (it already clamps to the viewport) — adjust `max-width`/`min-width` (`:243`) only
       if it overflows.
-- [ ] Finalize the "Responsive / mobile" section in `docs/design-system.md` (breakpoint = 720px,
+- [x] Finalize the "Responsive / mobile" section in `docs/design-system.md` (breakpoint = 720px,
       chip strip, bottom sheet, ⋮ menu, 44px tap targets, 16px mobile inputs, `dvh`).
 
 **Automated Verification**:
 - [ ] `npm run check` passes.
-- [ ] `git grep -n "100dvh" todos.html` shows the app shell and drawer both updated.
+- [x] `git grep -n "100dvh" todos.html` shows the app shell and drawer both updated.
 
 **Manual Verification**:
 - [ ] At 390px width: the toolbar wraps without overflow; chips, checkbox, and ⋮ menus are easy to

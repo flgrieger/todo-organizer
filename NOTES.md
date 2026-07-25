@@ -110,3 +110,17 @@ the app stays one offline file. True *automatic* phone↔Mac sync (edit on your 
 your Mac seconds later) is a separate, later step that would need putting the app online plus a
 small cloud store (see the research doc's "Path C"). The JSON export you're using here is the
 bridge to that future — your data comes along either way.
+
+## Using it on your phone (added 2026-07-25)
+
+On a narrow phone screen the app rearranges so everything the Mac can do is still within reach —
+just laid out for a thumb:
+
+- **Switch views** with the row of **chips under the title** (All active · Focus Today · Quick
+  Wins · Upcoming · Overdue · Long-term · Completed). Swipe the row sideways to reach them all;
+  tap one to switch.
+- **Everything else lives behind the “⋯” button** at the top-right. Tap it and a panel slides up
+  from the bottom with your **Areas & projects** (tap one to jump there, or add a new one) and the
+  **Data** actions — **Check Notes**, **Export backup**, **Import backup**, and the “last changed”
+  line. Tap anything, tap outside the panel, or press back to close it.
+- On a Mac (wide screen) nothing changes — the sidebar is still there exactly as before.
