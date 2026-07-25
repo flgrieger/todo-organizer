@@ -156,6 +156,22 @@ test("migrate is idempotent (running twice == once)", () => {
   assert.deepStrictEqual(twice, once);
 });
 
+test("classifyPull covers all five outcomes", () => {
+  // Empty store -> seed (regardless of dirty / lastServerRev).
+  assert.strictEqual(L.classifyPull(0, 0, true), "seed");
+  assert.strictEqual(L.classifyPull(0, 0, false), "seed");
+  assert.strictEqual(L.classifyPull(0, 5, false), "seed");
+  // Server moved ahead of us.
+  assert.strictEqual(L.classifyPull(8, 7, false), "adopt");    // no local edits -> take server
+  assert.strictEqual(L.classifyPull(8, 7, true), "conflict");  // local edits too -> ask
+  // Server is where we left it.
+  assert.strictEqual(L.classifyPull(7, 7, true), "push");      // we have edits -> push them
+  assert.strictEqual(L.classifyPull(7, 7, false), "idle");     // nothing to do
+  // Defensive: a server behind us (e.g. store reset) still routes by dirtiness, never adopts.
+  assert.strictEqual(L.classifyPull(3, 7, true), "push");
+  assert.strictEqual(L.classifyPull(3, 7, false), "idle");
+});
+
 test("migrate converts subtasks into a set losslessly", () => {
   const s = {
     areas: [{ id: "a", name: "Home", scope: "private" }],

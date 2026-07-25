@@ -160,6 +160,50 @@
   .imp-item.imp-more { color: var(--ink-faint); font-style: italic; }
   .imp-actions { display: flex; gap: 10px; align-items: center; }
 
+  /* ---------- Sync: status pill · setup modal · conflict banner ---------- */
+  /* The header pill is the owner's at-a-glance trust signal. Hidden until sync is configured. */
+  .sync-pill {
+    display: inline-flex; align-items: center; gap: 7px; flex: none;
+    border: 1px solid var(--line-strong); background: var(--panel); color: var(--ink-soft);
+    border-radius: 999px; padding: 6px 12px; font-size: 12.5px; font-weight: 600;
+    transition: border-color .12s, color .12s, background .12s;
+  }
+  .sync-pill:hover { border-color: var(--forest); color: var(--forest); }
+  .sync-pill .sync-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ink-faint); flex: none; }
+  .sync-pill.is-synced { background: var(--accent-soft); border-color: var(--accent); color: var(--forest); }
+  .sync-pill.is-synced .sync-dot { background: var(--green); }
+  .sync-pill.is-saving .sync-dot { background: var(--amber); }
+  .sync-pill.is-offline { color: var(--ink-faint); }
+  .sync-pill.is-offline .sync-dot { background: var(--ink-faint); }
+  .sync-pill.is-attention { background: #fdeceb; border-color: var(--red); color: var(--red); }
+  .sync-pill.is-attention .sync-dot { background: var(--red); }
+
+  /* Centered setup modal (its own scrim #syncScrim). */
+  .modal {
+    position: fixed; z-index: 55; left: 50%; top: 50%; transform: translate(-50%, -50%);
+    width: 440px; max-width: 92vw; background: var(--panel);
+    border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow);
+    display: none; flex-direction: column; max-height: 88vh; overflow: hidden;
+  }
+  .modal.open { display: flex; }
+  .modal-head { padding: 16px 20px; border-bottom: 1px solid var(--line); font-weight: 800; color: var(--forest); font-size: 15px; }
+  .modal-body { padding: 18px 20px; overflow-y: auto; }
+  .modal-foot { padding: 14px 20px; border-top: 1px solid var(--line); display: flex; gap: 10px; align-items: center; }
+  .sync-hint { font-size: 11.5px; color: var(--ink-faint); margin-top: 6px; }
+  .sync-test-result { font-size: 12.5px; margin-top: 10px; min-height: 16px; }
+  .sync-test-result.ok { color: var(--green); }
+  .sync-test-result.err { color: var(--red); }
+
+  /* Conflict banner — reuses the imp-banner family, tinted red for "choose a side". */
+  .sync-banner {
+    margin: 12px 28px 0; padding: 14px 16px;
+    background: #fdeceb; border: 1px solid var(--red);
+    border-radius: var(--radius); box-shadow: var(--shadow);
+  }
+  .sync-banner .sb-head { font-weight: 700; color: var(--red); font-size: 14px; }
+  .sync-banner .sb-sum { font-size: 12.5px; color: var(--ink); margin: 8px 0 12px; white-space: pre-line; }
+  .sync-banner .sb-actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+
   /* ---------- Cross-project attribute filter bar ---------- */
   .filterbar { display:flex; align-items:center; gap:8px; flex-wrap:wrap;
     padding:10px 28px; border-bottom:1px solid var(--line); background:var(--panel); }
@@ -434,6 +478,10 @@
     .topbar-title { min-width: 0; }
     .topbar h1 { font-size: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .mode-toggle button { padding: 9px 14px; }
+    /* Save width on phones: the pill collapses to just its status dot (tap it for full settings). */
+    .sync-pill .sync-label { display: none; }
+    .sync-pill { padding: 9px 11px; }
+    .sync-banner { margin-left: 16px; margin-right: 16px; }
   }
 </style>
 </head>
@@ -474,6 +522,9 @@
         <div class="sub" id="viewSub"></div>
       </div>
       <div class="spacer"></div>
+      <button class="sync-pill hidden" id="syncPill" title="Sync settings" aria-label="Sync status and settings">
+        <span class="sync-dot"></span><span class="sync-label">Synced ✓</span>
+      </button>
       <button class="nav-toggle" id="navToggle" title="Menu" aria-label="Open menu">⋯</button>
     </div>
 
@@ -503,6 +554,7 @@
     <div class="filterbar" id="filterBar"></div>
 
     <div class="imp-banner hidden" id="importBanner"></div>
+    <div class="sync-banner hidden" id="syncBanner"></div>
 
     <div class="list-wrap" id="listWrap"></div>
   </main>
@@ -544,6 +596,36 @@
 <!-- Inline edit popover (positioned in JS next to the clicked chip) -->
 <div class="pop" id="pop"></div>
 
+<!-- Sync setup modal + its own scrim (one-time per-device connect). -->
+<div class="scrim" id="syncScrim"></div>
+<div class="modal" id="syncModal" role="dialog" aria-modal="true" aria-labelledby="syncModalTitle">
+  <div class="modal-head" id="syncModalTitle">🔄 Automatic sync</div>
+  <div class="modal-body">
+    <p style="font-size:12.5px;color:var(--ink-soft);margin:0 0 14px">
+      Sync your todos between this device and your others through your <b>own private</b> cloud
+      store. Paste the details once — they're remembered on this device only. See
+      <b>sync-worker/README.md</b> for the one-time setup (about 10 minutes, free).
+    </p>
+    <div class="field">
+      <label>Worker URL</label>
+      <input type="text" id="syncUrlInput" placeholder="https://todo-sync.your-name.workers.dev" autocomplete="off" spellcheck="false" />
+    </div>
+    <div class="field">
+      <label>Secret key</label>
+      <input type="text" id="syncKeyInput" placeholder="your long private key" autocomplete="off" spellcheck="false" />
+      <div class="sync-hint">This protects your data. It only ever travels to your own Worker.</div>
+    </div>
+    <button class="btn" id="syncTestBtn" type="button">Test connection</button>
+    <div class="sync-test-result" id="syncTestResult"></div>
+  </div>
+  <div class="modal-foot">
+    <button class="btn danger hidden" id="syncDisconnectBtn" type="button">Disconnect</button>
+    <div style="flex:1"></div>
+    <button class="btn ghost" id="syncCancelBtn" type="button">Cancel</button>
+    <button class="btn primary" id="syncConnectBtn" type="button">Save &amp; connect</button>
+  </div>
+</div>
+
 <!-- Pure business rules, shared with the Node test toolbox (see logic.js) -->
 <script src="logic.js"></script>
 
@@ -582,7 +664,12 @@ function load() {
 // app / switching mode / sorting / filtering never makes this device look "newer".
 function save() {
   const sig = contentSig(state);
-  if (sig !== lastSig) { state.updatedAt = Date.now(); lastSig = sig; }
+  if (sig !== lastSig) {
+    state.updatedAt = Date.now(); lastSig = sig;
+    // A genuine data change is the one thing worth pushing to the cloud (debounced).
+    // No-op unless sync is configured on this device — otherwise the app is unchanged.
+    if (typeof syncEnabled === "function" && syncEnabled()) scheduleSync();
+  }
   localStorage.setItem(STORE_KEY, JSON.stringify(state));
 }
 
@@ -832,6 +919,11 @@ function renderData(...boxes) {
     file.onchange = e => { closeNavSheet(); if (e.target.files[0]) importData(e.target.files[0]); e.target.value = ""; };
     imp.onclick = () => file.click();
     box.appendChild(imp); box.appendChild(file);
+
+    const sync = el("button", "nav-item");
+    sync.innerHTML = `<span class="ico">🔄</span> Sync…`;
+    sync.onclick = () => { closeNavSheet(); openSyncModal(); };
+    box.appendChild(sync);
 
     box.appendChild(el("div", "last-changed"));
   });
@@ -1894,6 +1986,290 @@ function importTodos(items, scope) {
   render();
 }
 
+/* ============================ Sync (cross-device) ============================ */
+// Optional automatic sync on top of the offline-first localStorage store. If no Sync config is
+// present on this device, EVERYTHING here is a no-op and the app behaves exactly as before.
+// localStorage stays the local source of truth; a tiny Cloudflare Worker (see sync-worker/) holds
+// one { rev, data } envelope. A monotonic `rev` guard makes silent overwrite impossible — the
+// pull-time decision is the pure classifyPull() in logic.js. Every network call is wrapped so a
+// failure only shows the "Offline" pill and never throws into render() (mirrors checkNotes()).
+
+const SYNC_CFG_KEY = "todo_sync_cfg_v1";       // { url, key } — per device, never committed to git
+const SYNC_STATE_KEY = "todo_sync_state_v1";   // { serverRev, syncedSig } — runtime sync bookkeeping
+const SYNC_POLL_MS = 5000;                     // pull cadence while the tab is visible
+const SYNC_DEBOUNCE_MS = 1000;                 // coalesce a burst of edits into one push
+
+function loadSyncCfg() {
+  try { const raw = localStorage.getItem(SYNC_CFG_KEY); if (raw) return JSON.parse(raw); } catch (e) {}
+  return null;
+}
+function loadSyncState() {
+  try { const raw = localStorage.getItem(SYNC_STATE_KEY); if (raw) return JSON.parse(raw); } catch (e) {}
+  return { serverRev: 0, syncedSig: null };
+}
+function saveSyncState() { localStorage.setItem(SYNC_STATE_KEY, JSON.stringify(syncRuntime)); }
+function saveSyncCfg(cfg) {
+  syncCfg = cfg;
+  if (cfg) localStorage.setItem(SYNC_CFG_KEY, JSON.stringify(cfg));
+  else localStorage.removeItem(SYNC_CFG_KEY);
+}
+
+let syncCfg = loadSyncCfg();
+let syncRuntime = loadSyncState();
+let syncTimer = null;
+let syncLoopStarted = false;
+
+function syncEnabled() { return !!(syncCfg && syncCfg.url && syncCfg.key); }
+// Unpushed local edits? (compares the real-data signature to what we last synced.)
+function dirty() { return contentSig(state) !== syncRuntime.syncedSig; }
+function syncUrl() { return syncCfg.url.replace(/\/+$/, "") + "/todos"; }
+function authHeaders(extra) { return Object.assign({ "Authorization": "Bearer " + syncCfg.key }, extra || {}); }
+
+// The header status pill — Synced ✓ / Saving… / Offline / ⚠ needs attention. Hidden when
+// sync isn't configured. Pass no arg to just refresh visibility (e.g. after disconnect).
+function setSyncStatus(status) {
+  const pill = $("#syncPill");
+  if (!pill) return;
+  if (!syncEnabled()) { pill.className = "sync-pill hidden"; return; }
+  const map = {
+    synced:    { cls: "is-synced",    label: "Synced ✓",          title: "In sync" },
+    saving:    { cls: "is-saving",    label: "Saving…",            title: "Saving…" },
+    offline:   { cls: "is-offline",   label: "Offline",            title: "Offline — will retry" },
+    attention: { cls: "is-attention", label: "⚠ Needs attention",  title: "Needs attention" },
+  };
+  const m = map[status] || map.synced;
+  pill.className = "sync-pill " + m.cls;
+  pill.title = "Sync: " + m.title + " — click for settings";
+  const lbl = pill.querySelector(".sync-label");
+  if (lbl) lbl.textContent = m.label;
+}
+
+// Debounced push after a real edit (called from save()). Shows Saving… right away.
+function scheduleSync() {
+  if (!syncEnabled()) return;
+  setSyncStatus("saving");
+  clearTimeout(syncTimer);
+  syncTimer = setTimeout(pushRemote, SYNC_DEBOUNCE_MS);
+}
+
+// PUT our whole state, guarded by the server rev we last saw. 200 → we're the new head;
+// 409 → someone else moved on (conflict); network error → Offline, keep local edits.
+async function pushRemote() {
+  if (!syncEnabled()) return;
+  setSyncStatus("saving");
+  const baseRev = syncRuntime.serverRev || 0;
+  const snapshotSig = contentSig(state);
+  let r;
+  try {
+    r = await fetch(syncUrl(), {
+      method: "PUT",
+      headers: authHeaders({ "Content-Type": "application/json" }),
+      body: JSON.stringify({ baseRev, data: state }),
+    });
+  } catch (e) {
+    console.debug("sync: offline (fetch failed) — keeping local edits, will retry");
+    setSyncStatus("offline");
+    return;
+  }
+  if (r.status === 409) {
+    let body = {}; try { body = await r.json(); } catch (e) {}
+    console.debug("sync: push baseRev=" + baseRev + " -> 409 (conflict, server rev=" + (body && body.rev) + ")");
+    onSyncConflict(body && body.data, body && body.rev);
+    return;
+  }
+  if (!r.ok) { console.debug("sync: push failed http " + r.status); setSyncStatus("offline"); return; }
+  let body = {}; try { body = await r.json(); } catch (e) {}
+  syncRuntime.serverRev = body.rev;
+  syncRuntime.syncedSig = snapshotSig;
+  saveSyncState();
+  console.debug("sync: push baseRev=" + baseRev + " -> ok rev=" + body.rev);
+  if (dirty()) scheduleSync();      // more edits landed mid-flight — push again
+  else setSyncStatus("synced");
+}
+
+// GET the server envelope and act on classifyPull()'s verdict. Never overwrites on its own.
+async function pullRemote() {
+  if (!syncEnabled()) return;
+  if (syncConflict) return;   // a conflict is on screen awaiting the owner's choice — don't re-pull over it
+  let body;
+  try {
+    const r = await fetch(syncUrl(), { headers: authHeaders() });
+    if (!r.ok) throw new Error("http " + r.status);
+    body = await r.json();
+  } catch (e) {
+    console.debug("sync: offline (fetch failed) — keeping local edits, will retry");
+    setSyncStatus("offline");
+    return;
+  }
+  const serverRev = body.rev || 0;
+  const decision = classifyPull(serverRev, syncRuntime.serverRev || 0, dirty());
+  console.debug("sync: pull rev=" + serverRev + " (" + decision + ")");
+  if (decision === "seed" || decision === "push") {
+    syncRuntime.serverRev = serverRev;   // base our push on what the server actually has now
+    pushRemote();
+  } else if (decision === "adopt") {
+    adoptRemote(body.data, serverRev);
+  } else if (decision === "conflict") {
+    onSyncConflict(body.data, serverRev);
+  } else {
+    syncRuntime.serverRev = serverRev;   // idle — record we've seen this rev
+    saveSyncState();
+    setSyncStatus("synced");
+  }
+}
+
+// Replace local state with the server's copy (migrate first, exactly like importData), mark this
+// device clean, and re-render — gently keeping the current view where it still makes sense.
+function adoptRemote(data, rev) {
+  if (!data) { syncRuntime.serverRev = rev; syncRuntime.syncedSig = contentSig(state); saveSyncState(); setSyncStatus("synced"); return; }
+  state = migrate(data);
+  lastSig = contentSig(state);         // adopting isn't a local edit — don't bump updatedAt or re-push
+  reconcileUiAfterStateSwap();
+  syncRuntime.serverRev = rev;
+  syncRuntime.syncedSig = contentSig(state);
+  saveSyncState();
+  render();
+  setSyncStatus("synced");
+}
+
+// After state is swapped under us (adopt / keep-mine), drop selections that may no longer exist
+// and close any open editors. ui.mode (which mode this device is viewing) is left untouched.
+function reconcileUiAfterStateSwap() {
+  closePop();
+  closeDrawer();
+  ui.addTaskGroupId = null;
+  if (!ui.filters) ui.filters = noFilters();
+  if (ui.view === "area") {
+    const a = areaById(ui.areaId);
+    if (!a || a.scope !== ui.mode) { ui.view = "all"; ui.areaId = null; ui.projectId = null; }
+    else if (ui.projectId && !projectById(ui.projectId)) { ui.projectId = null; }
+  }
+}
+
+// A genuine conflict (both sides moved) must NEVER silently overwrite. We hold the server's newer
+// copy and raise a banner so the owner picks a side. Reached from both a pull "conflict" verdict
+// and a push 409 (the other device advanced between our pull and our push).
+let syncConflict = null;   // { data, rev } — the server copy awaiting the owner's choice
+function onSyncConflict(serverData, serverRev) {
+  console.debug("sync: conflict (server rev=" + serverRev + ") — asking the owner (no overwrite)");
+  syncConflict = { data: serverData, rev: serverRev };
+  setSyncStatus("attention");
+  showSyncBanner();
+}
+
+// The conflict banner: a plain-language summary (this device vs the cloud — todo counts + when
+// each last changed) and the two confirmed choices. Nothing is overwritten until one is clicked.
+function showSyncBanner() {
+  const c = syncConflict;
+  const banner = $("#syncBanner");
+  if (!c) { banner.classList.add("hidden"); return; }
+  banner.innerHTML = "";
+  banner.appendChild(el("div", "sb-head", "⚠ Sync conflict — this device and the cloud both changed"));
+  const localN = state.todos.length;
+  const cloudN = c.data && Array.isArray(c.data.todos) ? c.data.todos.length : 0;
+  banner.appendChild(el("div", "sb-sum",
+    "This device:  " + localN + " todo" + (localN === 1 ? "" : "s") + " · last changed " + fmtStamp(state.updatedAt) + "\n" +
+    "In the cloud: " + cloudN + " todo" + (cloudN === 1 ? "" : "s") + " · last changed " + fmtStamp(c.data && c.data.updatedAt)));
+  const actions = el("div", "sb-actions");
+  const useNewer = el("button", "btn primary", "Use the newer version");
+  useNewer.onclick = resolveConflictAdopt;
+  const keepMine = el("button", "btn", "Keep mine");
+  keepMine.onclick = () => keepMineOverwrite(c.rev);
+  actions.appendChild(useNewer);
+  actions.appendChild(keepMine);
+  banner.appendChild(actions);
+  banner.classList.remove("hidden");
+}
+function hideSyncBanner() { syncConflict = null; $("#syncBanner").classList.add("hidden"); }
+
+// "Use the newer version" — take the cloud copy (migrate + replace, like adopt).
+function resolveConflictAdopt() {
+  const c = syncConflict;
+  if (!c) return;
+  hideSyncBanner();
+  adoptRemote(c.data, c.rev);
+}
+
+// "Keep mine" — re-base our push on the server's CURRENT rev so this write is accepted and wins.
+async function keepMineOverwrite(serverRev) {
+  syncRuntime.serverRev = serverRev;
+  saveSyncState();
+  hideSyncBanner();
+  await pushRemote();   // baseRev == serverRev -> accepted; ours becomes the new head
+}
+
+// Start polling + wake on focus/visibility/online. Idempotent; only runs when configured.
+function startSyncLoop() {
+  if (syncLoopStarted || !syncEnabled()) return;
+  syncLoopStarted = true;
+  setInterval(() => { if (syncEnabled() && document.visibilityState === "visible") pullRemote(); }, SYNC_POLL_MS);
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") pullRemote(); });
+  window.addEventListener("focus", () => pullRemote());
+  window.addEventListener("online", () => pullRemote());
+}
+
+/* ---- Sync setup modal ---- */
+function openSyncModal() {
+  const cfg = syncCfg || { url: "", key: "" };
+  $("#syncUrlInput").value = cfg.url || "";
+  $("#syncKeyInput").value = cfg.key || "";
+  const res = $("#syncTestResult"); res.textContent = ""; res.className = "sync-test-result";
+  $("#syncDisconnectBtn").classList.toggle("hidden", !syncEnabled());
+  $("#syncScrim").classList.add("open");
+  $("#syncModal").classList.add("open");
+  $("#syncUrlInput").focus();
+}
+function closeSyncModal() {
+  $("#syncScrim").classList.remove("open");
+  $("#syncModal").classList.remove("open");
+}
+function connectSync() {
+  const url = $("#syncUrlInput").value.trim();
+  const key = $("#syncKeyInput").value.trim();
+  if (!url || !key) { alert("Please paste both the Worker URL and your secret key."); return; }
+  saveSyncCfg({ url: url.replace(/\/+$/, ""), key });
+  syncRuntime = { serverRev: 0, syncedSig: null };   // fresh device: unknown server rev, local counts as dirty
+  saveSyncState();
+  hideSyncBanner();
+  syncLoopStarted = false;
+  closeSyncModal();
+  setSyncStatus("saving");
+  pullRemote();          // first contact: seed the store, or adopt what's already there
+  startSyncLoop();
+  renderNav();           // refresh the Data section (pill visibility handled by setSyncStatus)
+}
+function disconnectSync() {
+  if (!confirm("Disconnect sync on this device? Your todos stay here — they just stop syncing.")) return;
+  saveSyncCfg(null);
+  localStorage.removeItem(SYNC_STATE_KEY);
+  syncRuntime = { serverRev: 0, syncedSig: null };
+  clearTimeout(syncTimer);
+  hideSyncBanner();
+  closeSyncModal();
+  setSyncStatus();       // hides the pill
+  renderNav();
+}
+// A read-only GET to prove the URL + key work, reported inline (doesn't change anything).
+async function testSyncConnection() {
+  const url = $("#syncUrlInput").value.trim().replace(/\/+$/, "");
+  const key = $("#syncKeyInput").value.trim();
+  const res = $("#syncTestResult");
+  if (!url || !key) { res.className = "sync-test-result err"; res.textContent = "Enter the URL and key first."; return; }
+  res.className = "sync-test-result"; res.textContent = "Testing…";
+  try {
+    const r = await fetch(url + "/todos", { headers: { "Authorization": "Bearer " + key } });
+    if (r.status === 401) { res.className = "sync-test-result err"; res.textContent = "Reached the Worker, but the key was rejected (401). Check the secret key."; return; }
+    if (!r.ok) { res.className = "sync-test-result err"; res.textContent = "Connected, but got HTTP " + r.status + "."; return; }
+    const body = await r.json();
+    const n = body && body.data && Array.isArray(body.data.todos) ? body.data.todos.length + " todos" : "no data yet";
+    res.className = "sync-test-result ok";
+    res.textContent = "✓ Connected. Cloud has " + n + " (version " + (body.rev || 0) + ").";
+  } catch (e) {
+    res.className = "sync-test-result err";
+    res.textContent = "Couldn't reach that URL. Check the address and your connection.";
+  }
+}
+
 /* ============================ Utils ============================ */
 function escapeHtml(s) { return String(s).replace(/[&<>]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c])); }
 function escapeAttr(s) { return String(s).replace(/["&<>]/g, c => ({ '"': "&quot;", "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c])); }
@@ -1912,6 +2288,14 @@ $("#addAreaBtn").addEventListener("click", addArea);
 $("#navToggle").addEventListener("click", openNavSheet);
 $("#navScrim").addEventListener("click", closeNavSheet);
 
+// Sync: the pill and the modal (one-time per-device setup).
+$("#syncPill").addEventListener("click", openSyncModal);
+$("#syncScrim").addEventListener("click", closeSyncModal);
+$("#syncCancelBtn").addEventListener("click", closeSyncModal);
+$("#syncConnectBtn").addEventListener("click", connectSync);
+$("#syncDisconnectBtn").addEventListener("click", disconnectSync);
+$("#syncTestBtn").addEventListener("click", testSyncConnection);
+
 $("#drawerClose").addEventListener("click", closeDrawer);
 $("#scrim").addEventListener("click", closeDrawer);
 $("#deleteBtn").addEventListener("click", () => {
@@ -1921,7 +2305,7 @@ $("#deleteBtn").addEventListener("click", () => {
 });
 $("#doneBtn").addEventListener("click", () => { const t = currentTodo(); if (t) { toggleDone(t); renderDrawer(); } });
 $("#starBtn").addEventListener("click", () => { const t = currentTodo(); if (t) { t.star = !t.star; renderDrawer(); render(); } });
-document.addEventListener("keydown", e => { if (e.key === "Escape") { closePop(); closeDrawer(); closeNavSheet(); } });
+document.addEventListener("keydown", e => { if (e.key === "Escape") { closePop(); closeDrawer(); closeNavSheet(); closeSyncModal(); } });
 
 // Reflect the initial ui state on the toolbar controls (e.g. Group defaults to Project).
 $("#sortSel").value = ui.sort;
@@ -1930,6 +2314,15 @@ $("#groupSel").value = ui.group;
 render();
 // On open, quietly check the optional Notes helper (silent if it isn't running).
 checkNotes();
+// If sync is configured on this device, show the pill, pull the latest, and start the loop.
+// All silent + additive: unconfigured devices skip this entirely and behave exactly as before.
+if (syncEnabled()) {
+  setSyncStatus("saving");
+  pullRemote();
+  startSyncLoop();
+} else {
+  setSyncStatus();   // keeps the pill hidden
+}
 </script>
 </body>
 </html>

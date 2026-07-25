@@ -56,6 +56,34 @@ Attribute chips reuse a fixed palette — keep these consistent:
 - **Area colours** (`AREA_COLORS` in JS) are a separate categorical set of 8 distinct hues —
   used only as small per-area dots, not for text.
 
+## Sync status pill
+
+The optional cross-device sync layer surfaces a small **status pill** in the header (`.sync-pill`,
+right of the title, before the "⋯"). It's the owner's at-a-glance trust signal and is **hidden
+until sync is configured** on the device. A leading coloured dot (`.sync-dot`) carries the state;
+the text label sits beside it (and collapses to just the dot under the 720px breakpoint).
+
+| State | Class | Look | Meaning |
+|-------|-------|------|---------|
+| Synced | `.is-synced` | `--accent-soft` bg, `--accent` border, `--green` dot | in sync |
+| Saving | `.is-saving` | default pill, `--amber` dot | a push is in flight |
+| Offline | `.is-offline` | faint (`--ink-faint`) | network unreachable; edits kept locally |
+| Needs attention | `.is-attention` | red (`#fdeceb` bg, `--red` border + dot) | a conflict needs a choice |
+
+Rules: reuse the existing tokens (no new colours) — the pill's palette maps onto the same
+green/amber/red semantics as the attribute chips. Clicking the pill opens the **Sync setup modal**
+(`.modal` — a centered card with its own scrim `#syncScrim`; URL + key fields, Test connection,
+Save & connect / Disconnect).
+
+**Conflict banner** (`.sync-banner`, `#syncBanner`). When a real conflict is detected (this device
+and the cloud both changed), a red-tinted banner — same layout family as the Notes `.imp-banner`,
+red instead of green — appears under the toolbar. It shows a short plain-language summary
+(`.sb-sum`: this device vs the cloud — todo counts + when each last changed, via `fmtStamp`) and a
+`.sb-actions` row with exactly two buttons: **Use the newer version** (primary/`.btn.primary` — adopt
+the cloud copy) and **Keep mine** (plain `.btn` — push this device's copy so it wins). It is a
+required decision, so — unlike the modal — it does **not** dismiss on Escape/scrim; it clears only
+when a side is chosen (or on disconnect). Nothing is overwritten until one button is clicked.
+
 ## Responsive / mobile
 
 Single breakpoint: **`max-width: 720px`** (phone / small tablet). Above it, the desktop
