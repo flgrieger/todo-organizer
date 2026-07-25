@@ -12,6 +12,9 @@ skills-lock.json
 # Scratch / working files
 temp/
 
+# Local dev environment pin (per-machine tool versions; not part of the app)
+mise.toml
+
 # Python bytecode cache (notes-helper)
 __pycache__/
 *.pyc
