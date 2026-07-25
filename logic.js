@@ -191,6 +191,28 @@ function passesFilters(t, filters) { return FILTERS.every((f) => !filters[f.key]
 function uid() { return Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4); }
 
 /**
+ * Decide what a pull should do, given the server's current `rev`, the `rev` we last synced to,
+ * and whether this device has unpushed local edits. The heart of pull-time sync behaviour —
+ * pure so it can be unit-tested without any network. Never overwrites on its own: a genuine
+ * two-sided divergence returns "conflict" for the app to resolve with a banner.
+ *
+ * @param {number} serverRev      The `rev` a fresh GET returned (0 = the store is empty).
+ * @param {number} lastServerRev  The `rev` this device last synced to (0 = never).
+ * @param {boolean} localDirty    True iff local data changed since the last successful sync.
+ * @returns {"seed"|"adopt"|"conflict"|"push"|"idle"}
+ *   - "seed":     the store is empty — push our local data to start it off.
+ *   - "adopt":    the other device moved ahead and we have no local edits — take the server copy.
+ *   - "conflict": the other device moved ahead AND we have local edits — ask which to keep.
+ *   - "push":     the server is where we left it and we have local edits — push them.
+ *   - "idle":     nothing changed on either side — already in sync.
+ */
+function classifyPull(serverRev, lastServerRev, localDirty) {
+  if (serverRev === 0) return "seed";
+  if (serverRev > lastServerRev) return localDirty ? "conflict" : "adopt";
+  return localDirty ? "push" : "idle";
+}
+
+/**
  * Bring older saved data up to date; idempotent. Adds scope/mode/defaults and runs the
  * one-time lossless subtask -> set(group) conversion.
  * @param {any} s  Parsed state (possibly from an old version).
@@ -234,6 +256,6 @@ if (typeof module !== "undefined" && module.exports) {
   module.exports = {
     noFilters, uid, todayISO, daysUntil, fmtDue, fmtEst,
     isQuickWin, LONGTERM_DAYS, isLongTerm, FILTERS, passesFilters,
-    smartScore, groupScore, isGroupComplete, sortTodos, migrate,
+    smartScore, groupScore, isGroupComplete, sortTodos, migrate, classifyPull,
   };
 }

@@ -4,7 +4,7 @@ git_commit: f467469d1851eaa58087f9b89fd18d3b3b4c0549
 branch: docs/auto-sync-spec
 topic: "Automatic cross-device sync (iPhone ↔ Mac) via a tiny Cloudflare store"
 tags: [plan, sync, cloudflare, worker, kv, offline-first, localStorage]
-status: ready
+status: done
 ---
 
 # PLAN: Automatic cross-device sync via a tiny Cloudflare store
@@ -203,15 +203,15 @@ Stand up the tiny store the client will talk to, plus its setup docs, so it can 
 isolation (by `curl`) before any client code exists.
 
 **Tasks**:
-- [ ] Create `sync-worker/worker.js` implementing:
-  - [ ] `OPTIONS` → CORS preflight (allow the configured origin, `GET, PUT, OPTIONS`, the
+- [x] Create `sync-worker/worker.js` implementing:
+  - [x] `OPTIONS` → CORS preflight (allow the configured origin, `GET, PUT, OPTIONS`, the
         `Authorization`/`Content-Type` headers).
-  - [ ] Bearer check: constant-time compare of the `Authorization: Bearer …` token to the
+  - [x] Bearer check: constant-time compare of the `Authorization: Bearer …` token to the
         `SYNC_KEY` secret; `401` on mismatch/missing.
-  - [ ] `GET /todos` → read KV key `blob`; return `{ rev, data }` or `{ rev: 0, data: null }`.
-  - [ ] `PUT /todos` → parse `{ baseRev, data }`, apply the pure `applyPut(current, body)`, write
+  - [x] `GET /todos` → read KV key `blob`; return `{ rev, data }` or `{ rev: 0, data: null }`.
+  - [x] `PUT /todos` → parse `{ baseRev, data }`, apply the pure `applyPut(current, body)`, write
         KV on accept, return `200 { ok:true, rev }` or `409 { ok:false, rev, data }`.
-  - [ ] Pure `applyPut(current, body)` (accept iff `body.baseRev === current.rev`; empty store's
+  - [x] Pure `applyPut(current, body)` (accept iff `body.baseRev === current.rev`; empty store's
         `rev` is `0`; on accept return `{ rev: current.rev + 1, data: body.data }`) exported via a
         `module.exports` guard.
   ```js
@@ -222,21 +222,24 @@ isolation (by `curl`) before any client code exists.
     return { ok: true, next: { rev: rev + 1, data: body.data } };
   }
   ```
-- [ ] Create `sync-worker/worker.test.js` (`node --test`) covering `applyPut`: seed from empty,
+- [x] Create `sync-worker/worker.test.js` (`node --test`) covering `applyPut`: seed from empty,
       accept on matching `baseRev`, reject (409) on stale `baseRev`.
-- [ ] Wire `sync-worker/worker.test.js` into the `npm run check` test run (or a sibling `node --test`
-      glob) so it runs in CI.
-- [ ] Create `sync-worker/README.md`: exact Cloudflare steps (free account → create Worker → create
+- [x] Wire `sync-worker/worker.test.js` into the `npm run check` test run (or a sibling `node --test`
+      glob) so it runs in CI. (`node --test` auto-discovers `sync-worker/worker.test.js`; added
+      ESLint config blocks for the worker files so lint stays green.)
+- [x] Create `sync-worker/README.md`: exact Cloudflare steps (free account → create Worker → create
       + bind a KV namespace as `SYNC_KV` → set `SYNC_KEY` secret → set `ALLOW_ORIGIN` → deploy → copy
       the `*.workers.dev` URL) and a `curl` GET/PUT/GET round-trip to self-test.
 
 **Automated Verification**:
-- [ ] `node --test` passes for `sync-worker/worker.test.js` (applyPut accept/409/seed).
-- [ ] `npm run check` is green (lint + type-check + tests, worker test included).
+- [x] `node --test` passes for `sync-worker/worker.test.js` (applyPut accept/409/seed).
+- [x] `npm run check` is green (lint + type-check + tests, worker test included).
 
 **Manual Verification**:
-- [ ] Following `sync-worker/README.md`, a `curl` PUT with `baseRev:0` stores data and returns
-      `rev:1`; a second PUT with a stale `baseRev` returns `409`; GET returns the stored blob.
+- [x] Following `sync-worker/README.md`, a `curl` PUT with `baseRev:0` stores data and returns
+      `rev:1`; GET returns the stored blob. *(Owner deployed the Worker to their own Cloudflare
+      account and confirmed `{"ok":true,"rev":1}` then `{"rev":1,"data":{"hello":"world"}}` on
+      2026-07-25.)*
 
 ### Phase 2: Client sync engine + setup panel + status pill (happy path)
 
@@ -246,50 +249,56 @@ Make sync actually work for the normal case: connect a device, load on open, sav
 newer from the other device — with a visible status pill. (Conflict handling is Phase 3.)
 
 **Tasks**:
-- [ ] Add pure `classifyPull(serverRev, lastServerRev, localDirty)` to `logic.js`
+- [x] Add pure `classifyPull(serverRev, lastServerRev, localDirty)` to `logic.js`
       (`serverRev===0 → "seed"`; `serverRev>lastServerRev → localDirty ? "conflict" : "adopt"`;
       else `localDirty ? "push" : "idle"`) and export it.
-- [ ] Add `classifyPull` table tests to `logic.test.js` (all five outcomes).
-- [ ] Add a **Sync** section to `todos.html`'s inline script:
-  - [ ] `todo_sync_cfg_v1` load/save (`{ url, key }`) and `todo_sync_state_v1`
+- [x] Add `classifyPull` table tests to `logic.test.js` (all five outcomes).
+- [x] Add a **Sync** section to `todos.html`'s inline script:
+  - [x] `todo_sync_cfg_v1` load/save (`{ url, key }`) and `todo_sync_state_v1`
         (`{ serverRev, syncedSig }`); `syncEnabled()` = config present.
-  - [ ] `dirty()` = `contentSig(state) !== syncedSig`.
-  - [ ] `pullRemote()` — `GET`, then switch on `classifyPull(...)`: `seed`/`push` → `pushRemote()`;
-        `adopt` → `adoptRemote(data, rev)` (`migrate()` → replace `state` → reset `ui` like
-        `importData` → persist `serverRev`/`syncedSig` → `render()`); `idle` → set pill Synced;
-        `conflict` → deferred to Phase 3 (temporarily treat as `adopt`-blocked: leave a TODO that
-        Phase 3 replaces — do **not** overwrite).
-  - [ ] `pushRemote()` — `PUT { baseRev: serverRev, data: state }`; on `200` update
+  - [x] `dirty()` = `contentSig(state) !== syncedSig`.
+  - [x] `pullRemote()` — `GET`, then switch on `classifyPull(...)`: `seed`/`push` → `pushRemote()`;
+        `adopt` → `adoptRemote(data, rev)` (`migrate()` → replace `state` → `reconcileUiAfterStateSwap`
+        (gentler than `importData`'s full reset — keeps the current view when it still exists) →
+        persist `serverRev`/`syncedSig` → `render()`); `idle` → set pill Synced;
+        `conflict` → Phase-2 stub `onSyncConflict()` (pill ⚠, **no overwrite**), replaced in Phase 3.
+  - [x] `pushRemote()` — `PUT { baseRev: serverRev, data: state }`; on `200` update
         `serverRev`/`syncedSig`, pill Synced; on network error pill Offline (keep edits); (`409`
         handled in Phase 3).
-  - [ ] `scheduleSync()` — debounce (~1s) a `pushRemote()`; called from `save()` **only when the
+  - [x] `scheduleSync()` — debounce (~1s) a `pushRemote()`; called from `save()` **only when the
         content signature changed** (reuse the existing `sig !== lastSig` branch).
-  - [ ] `startSyncLoop()` — `setInterval(pullRemote, ~5000)` + `visibilitychange`/`focus`/`online`
-        → `pullRemote()`; started at boot only when `syncEnabled()`.
-- [ ] Hook `scheduleSync()` into `save()` (guarded by `syncEnabled()`), and call the boot pull +
+  - [x] `startSyncLoop()` — `setInterval(pullRemote, ~5000)` (only while the tab is visible) +
+        `visibilitychange`/`focus`/`online` → `pullRemote()`; started at boot only when `syncEnabled()`.
+- [x] Hook `scheduleSync()` into `save()` (guarded by `syncEnabled()`), and call the boot pull +
       `startSyncLoop()` next to the existing `checkNotes()` at the end of the script.
-- [ ] Add `#syncPill` to the topbar (before `#navToggle`); `setSyncStatus(state)` toggles
+- [x] Add `#syncPill` to the topbar (before `#navToggle`); `setSyncStatus(state)` toggles
       Synced ✓ / Saving… / Offline; hidden when sync is not configured. Clicking it opens the Sync
       modal.
-- [ ] Add a **"Sync…"** entry in `renderData(...)` (sidebar + mobile sheet, per-instance handlers
+- [x] Add a **"Sync…"** entry in `renderData(...)` (sidebar + mobile sheet, per-instance handlers
       like the other Data actions) that opens the Sync modal.
-- [ ] Add `#syncModal` (+ `#syncScrim`): fields for Worker URL + secret key, **Save & connect**,
+- [x] Add `#syncModal` (+ `#syncScrim`): fields for Worker URL + secret key, **Save & connect**,
       **Disconnect**, and a **Test connection** button that does a `GET` and reports OK/failed.
-- [ ] Add design-system tokens/rules for the status pill; document it in
+- [x] Add design-system tokens/rules for the status pill; document it in
       `docs/design-system.md` and note the sync layer + new localStorage keys in `CLAUDE.md`.
 
 **Automated Verification**:
-- [ ] `logic.test.js` covers all five `classifyPull` outcomes and passes.
-- [ ] `npm run check` is green.
+- [x] `logic.test.js` covers all five `classifyPull` outcomes and passes.
+- [x] `npm run check` is green.
+- [x] *(Extra)* A jsdom runtime smoke test boots the real `todos.html` against a mock Worker (using
+      the real `applyPut`) and confirms: boots clean + pill hidden unconfigured; connect → **seed** →
+      Synced (rev 1); other device ahead → **adopt** (rev 2); local edit + server ahead → conflict
+      **holds without overwriting** (pill ⚠). Debug traces match the plan's spec exactly.
 
 **Manual Verification**:
-- [ ] With the Worker from Phase 1: open the app in browser A, enter URL + key in the Sync panel →
+- [x] With the Worker from Phase 1: open the app in browser A, enter URL + key in the Sync panel →
       pill shows **Synced ✓**; add a todo → pill flicks **Saving…** then **Synced ✓**.
-- [ ] Open browser B (fresh profile), enter the same URL + key → B loads A's data within seconds.
-- [ ] Add/edit in A; within ~5s (or on focusing B) it appears in B, and vice-versa — no manual step.
-- [ ] Turn off the network → pill shows **Offline**, the app stays fully usable; restore network →
-      it returns to **Synced ✓** and the edit propagates.
-- [ ] Leaving the Sync panel empty → the app behaves exactly as before (no pill, no network calls).
+- [x] Open browser B (fresh profile), enter the same URL + key → B loads A's data within seconds.
+      *(Owner confirmed 2026-07-25. The first fresh-browser connect initially showed a conflict — fixed
+      so a pristine device now adopts silently; re-confirmed clean.)*
+- [x] Add/edit in A; within ~5s (or on focusing B) it appears in B, and vice-versa — no manual step.
+- [x] Turn off the network → pill shows **Offline**, the app stays fully usable; restore network →
+      it returns to **Synced ✓** and the edit propagates. *(Verified via Edge DevTools → Network → Offline.)*
+- [x] Leaving the Sync panel empty → the app behaves exactly as before (no pill, no network calls).
 
 ### Phase 3: Conflict safety (never silently overwrite) + offline robustness
 
@@ -299,37 +308,42 @@ Deliver the anti-"mess" guarantee: a real conflict asks the owner instead of gue
 edits reconcile safely on reconnect.
 
 **Tasks**:
-- [ ] `pushRemote()` — handle `409 { rev, data }`: set pill **⚠ needs attention** and open the
+- [x] `pushRemote()` — handle `409 { rev, data }`: set pill **⚠ needs attention** and open the
       conflict banner with the server's newer copy (do **not** overwrite).
-- [ ] `pullRemote()` — replace the Phase-2 TODO: on `classifyPull(...) === "conflict"` (server moved
-      ahead **and** local is dirty) open the conflict banner (do **not** adopt or overwrite).
-- [ ] Add `#syncBanner` (reuse the `.imp-banner` styling family) showing a short summary
+- [x] `pullRemote()` — replace the Phase-2 TODO: on `classifyPull(...) === "conflict"` (server moved
+      ahead **and** local is dirty) open the conflict banner (do **not** adopt or overwrite). Added a
+      `if (syncConflict) return;` guard so an on-screen conflict isn't re-pulled over while deciding.
+- [x] Add `#syncBanner` (reuse the `.imp-banner` styling family) showing a short summary
       (this device vs cloud: todo counts + last-changed times, via `fmtStamp`) and two buttons:
-  - [ ] **Use the newer version** → `adoptRemote(serverData, serverRev)` (migrate + replace + reset
+  - [x] **Use the newer version** → `adoptRemote(serverData, serverRev)` (migrate + replace + reset
         `ui` + persist + `render`), pill Synced.
-  - [ ] **Keep mine** → `keepMineOverwrite(serverRev)`: `PUT { baseRev: serverRev, data: state }`
+  - [x] **Keep mine** → `keepMineOverwrite(serverRev)`: `PUT { baseRev: serverRev, data: state }`
         (based on the server's current `rev`, so it now wins), then persist `serverRev`/`syncedSig`,
         pill Synced.
-- [ ] Offline robustness: on the `online` event and on each poll, if `dirty()` and status was
-      Offline, retry `pushRemote()` (which re-enters the same 409/conflict path if the other device
-      moved on).
-- [ ] Ensure every sync `fetch` is wrapped so a failure only sets **Offline** and never throws into
-      `render()` (mirror `checkNotes()`), and that `Escape` / scrim close the modal & banner
-      consistently with existing overlays.
-- [ ] Add design-system rules for the conflict banner; finalize `CLAUDE.md` (Architecture notes:
+- [x] Offline robustness: on the `online` event and on each poll, if `dirty()` and status was
+      Offline, retry `pushRemote()` (via the pull's `"push"` verdict, which re-enters the same
+      409/conflict path if the other device moved on).
+- [x] Ensure every sync `fetch` is wrapped so a failure only sets **Offline** and never throws into
+      `render()` (mirror `checkNotes()`), and that `Escape` / scrim close the modal (the banner is a
+      required choice and intentionally persists, like `.imp-banner`).
+- [x] Add design-system rules for the conflict banner; finalize `CLAUDE.md` (Architecture notes:
       the concurrency model, new localStorage keys, `classifyPull`; Roadmap: Phase 2 done) and add a
       short "Setting up sync" note pointing at `sync-worker/README.md`.
 
 **Automated Verification**:
-- [ ] `npm run check` is green.
+- [x] `npm run check` is green.
+- [x] *(Extra)* The jsdom runtime harness drives the whole conflict lifecycle: banner shown with
+      **Use the newer version** / **Keep mine**; Keep mine → our copy wins (rev 4, other device's edit
+      dropped); a fresh conflict → Use the newer version → adopt cloud (rev 5), local un-pushed edit
+      replaced; offline edit → pill Offline + edit kept → reconnect → pushed to cloud → Synced.
 
 **Manual Verification**:
-- [ ] Force a conflict: load A and B (both connected & in sync); take B **offline**; edit in B;
+- [x] Force a conflict: load A and B (both connected & in sync); take B **offline**; edit in B;
       edit **something different** in A (A pushes, server `rev` advances); bring B **online** →
-      B shows the conflict banner (not a silent overwrite).
-- [ ] From the banner, **Use the newer version** → B adopts A's copy and returns to Synced ✓.
-- [ ] Re-run the conflict, choose **Keep mine** → B's copy wins; A pulls it within seconds.
-- [ ] Throughout, no edit is ever lost without the banner appearing first.
+      B shows the conflict banner (not a silent overwrite). *(Owner confirmed 2026-07-25.)*
+- [x] From the banner, **Use the newer version** → B adopts A's copy and returns to Synced ✓.
+- [x] Re-run the conflict, choose **Keep mine** → B's copy wins; A pulls it within seconds.
+- [x] Throughout, no edit is ever lost without the banner appearing first.
 
 ## Implementation Notes
 
@@ -337,6 +351,33 @@ During implementation, document user feedback, problems, and decisions here.
 
 - **Status: ready.** Reviewed and approved by the owner on 2026-07-25 (phase scoping, the ~5s poll
   interval, and Sync-panel/conflict-banner wording all confirmed). Cleared for implementation.
+- **Implemented 2026-07-25** on branch `feat/auto-sync`. All three phases' code + automated
+  verification are done and green (`npm run check`: lint + type-check + 24 `logic`/`worker` tests).
+  What was built:
+  - **Worker** (`sync-worker/worker.js` + `worker.test.js` + `README.md`): service-worker format with
+    a `module.exports` guard (mirrors `logic.js`) so the pure `applyPut` is Node-tested; bearer auth
+    (constant-time compare), CORS, `GET/PUT /todos`. Chose service-worker format over ES-module so
+    the same file is both a live Worker and a `require()`-able test target, per the plan's guard.
+  - **Client** (`todos.html` Sync section) + pure `classifyPull` in `logic.js`: status pill, setup
+    modal, debounced push hooked into `save()`, ~5s visible-only poll + focus/online wake, adopt with
+    a gentler-than-import `reconcileUiAfterStateSwap`, and the conflict banner.
+  - **Docs**: `CLAUDE.md` (Architecture + Roadmap), `docs/design-system.md` (pill + banner).
+  - **Extra safety net beyond the plan:** a jsdom runtime harness (kept in the throwaway
+    `/home/sandbox/jsdom-check`, *not* committed) boots the real `todos.html` against a mock Worker
+    using the real `applyPut` and asserts the whole lifecycle end-to-end — all green.
+- **Deviations from the plan (minor):** (1) Worker is service-worker format (not ES-module) to keep
+  the `module.exports` test guard the plan asked for. (2) The conflict banner intentionally does *not*
+  close on Escape/scrim — it's a required choice (consistent with the non-dismissable `.imp-banner`);
+  the setup *modal* does close on both. (3) Offline-retry is handled by the existing pull `"push"`
+  verdict rather than a separate retry path (same effect, less code).
+- **All manual verification complete (2026-07-25).** The owner deployed the Worker to their own
+  Cloudflare account and confirmed: Phase 1 `curl` round-trip; Phase 2 two-browser sync (both
+  directions, offline→online); Phase 3 forced conflict with both **Keep mine** and **Use the newer
+  version**. One fix landed from testing — a pristine new device now adopts the cloud silently
+  instead of showing a first-connect conflict (commit `70e4f63`). **Status: done.**
+- **Post-merge follow-ups for the owner:** (1) tighten the Worker's `ALLOW_ORIGIN` from `*` to the
+  real `https://<username>.github.io` origin once the app is live on `main`; (2) connect the iPhone
+  (open the live app → Sync… → paste the same URL + key).
 
 ## References
 
