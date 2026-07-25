@@ -103,6 +103,17 @@ test("groupScore boosts a set with an overdue member", () => {
   assert.ok(L.groupScore(group, withOverdue) > L.groupScore(group, noOverdue));
 });
 
+test("isGroupComplete: true only when all members done and at least one member", () => {
+  const g = { id: "g", name: "s", prio: 1, areaId: "a", projectId: null, due: "", createdAt: 0 };
+  const done = mkTodo({ done: true, groupId: "g" });
+  const open = mkTodo({ done: false, groupId: "g" });
+  assert.strictEqual(L.isGroupComplete(g, []), false);                // empty set: not complete
+  assert.strictEqual(L.isGroupComplete(g, [open]), false);            // one open
+  assert.strictEqual(L.isGroupComplete(g, [done, open]), false);      // mixed
+  assert.strictEqual(L.isGroupComplete(g, [done]), true);             // single, done
+  assert.strictEqual(L.isGroupComplete(g, [done, { ...done }]), true);// all done
+});
+
 test("passesFilters ANDs active toggles; inactive filters don't restrict", () => {
   const off = L.noFilters();
   const highTask = mkTodo({ prio: 3 });

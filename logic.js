@@ -146,6 +146,13 @@ function groupScore(g, tasks) {
 }
 
 /**
+ * @param {Group} g
+ * @param {Todo[]} tasks  The group's member todos (caller supplies).
+ * @returns {boolean} True iff the set has >= 1 task and every task is done. Empty set = false.
+ */
+function isGroupComplete(g, tasks) { return tasks.length > 0 && tasks.every((t) => t.done); }
+
+/**
  * @param {Todo[]} list
  * @param {string} sortMode  "smart" | "due" | "prio" | "est" | "created"
  * @returns {Todo[]} A new sorted array (input not mutated).
@@ -227,6 +234,6 @@ if (typeof module !== "undefined" && module.exports) {
   module.exports = {
     noFilters, uid, todayISO, daysUntil, fmtDue, fmtEst,
     isQuickWin, LONGTERM_DAYS, isLongTerm, FILTERS, passesFilters,
-    smartScore, groupScore, sortTodos, migrate,
+    smartScore, groupScore, isGroupComplete, sortTodos, migrate,
   };
 }
