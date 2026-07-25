@@ -913,6 +913,22 @@ function renderList() {
         orderUnits(b.items).forEach(u => renderUnit(wrap, u));
       });
     }
+  } else if (ui.view === "done") {
+    // Completed: fully-done sets appear as clusters; other done todos stay standalone (tagged).
+    const units = buildCompletedUnits(list);
+    if (ui.group === "none") {
+      orderUnits(units).forEach(u => renderUnit(wrap, u, { showGroupTag: true }));
+    } else {
+      groupByUnits(units).forEach((b, i) => {
+        if (i > 0) wrap.appendChild(el("div", "group-sep"));
+        const h = el("div", "group-head");
+        h.appendChild(document.createTextNode(b.label));
+        const n = b.items.reduce((s, u) => s + (u.type === "todo" ? 1 : u.tasks.length), 0);
+        h.appendChild(el("span", "g-count", " · " + n));
+        wrap.appendChild(h);
+        orderUnits(b.items).forEach(u => renderUnit(wrap, u, { showGroupTag: true }));
+      });
+    }
   } else if (ui.group === "none") {
     sortTodos(list, ui.sort).forEach(t => wrap.appendChild(todoCard(t, { showGroupTag: true })));
   } else {
@@ -955,8 +971,38 @@ function buildUnits(list, relGroups) {
   return units;
 }
 
-function renderUnit(wrap, u) {
-  if (u.type === "todo") wrap.appendChild(todoCard(u.todo));
+// Completed-view units: cluster ONLY fully-done sets (all members ticked); every other done
+// todo — loose ones and the done members of a still-active set — stays a standalone tagged card.
+function buildCompletedUnits(list) {
+  const doneGroupIds = new Set(
+    state.groups.filter(g => {
+      const a = areaById(g.areaId);
+      return a && a.scope === ui.mode && isGroupComplete(g, groupTasks(g.id));
+    }).map(g => g.id)
+  );
+  const tasksByGroup = new Map();
+  list.forEach(t => {
+    if (t.groupId && doneGroupIds.has(t.groupId)) {
+      if (!tasksByGroup.has(t.groupId)) tasksByGroup.set(t.groupId, []);
+      tasksByGroup.get(t.groupId).push(t);
+    }
+  });
+  const units = [];
+  const seen = new Set();
+  list.forEach(t => {
+    if (t.groupId && doneGroupIds.has(t.groupId)) {
+      if (seen.has(t.groupId)) return;
+      seen.add(t.groupId);
+      units.push({ type: "group", group: groupById(t.groupId), tasks: sortTodos(tasksByGroup.get(t.groupId), ui.sort) });
+    } else {
+      units.push({ type: "todo", todo: t });
+    }
+  });
+  return units;
+}
+
+function renderUnit(wrap, u, todoOpts = {}) {
+  if (u.type === "todo") wrap.appendChild(todoCard(u.todo, todoOpts));
   else wrap.appendChild(groupCluster(u.group, u.tasks));
 }
 
