@@ -586,34 +586,19 @@ function save() {
   localStorage.setItem(STORE_KEY, JSON.stringify(state));
 }
 
+// A fresh install starts empty — just the two mode areas (Work, Private), ready for
+// real todos. No demo projects/sets/todos (the owner cleared these on 2026-07-25).
 function seed() {
   const work = { id: uid(), name: "Work", color: AREA_COLORS[0], scope: "work" };
   const priv = { id: uid(), name: "Private", color: AREA_COLORS[1], scope: "private" };
-  const pAlpha = { id: uid(), areaId: work.id, name: "Project Alpha" };
-  const pAdmin = { id: uid(), areaId: priv.id, name: "Admin (car, doctor…)" };
-  const today = new Date();
-  const iso = d => d.toISOString().slice(0, 10);
-  const plus = n => { const d = new Date(today); d.setDate(d.getDate() + n); return iso(d); };
-  // Demo group: a bundle of real todos under Private › Admin.
-  const chgTires = { id: uid(), name: "Change tires", prio: 3, areaId: priv.id, projectId: pAdmin.id, due: plus(20), createdAt: Date.now() };
   return {
     mode: "work",
     updatedAt: Date.now(),
     areas: [work, priv],
-    projects: [pAlpha, pAdmin],
-    groups: [chgTires],
+    projects: [],
+    groups: [],
     importedKeys: [],
-    todos: [
-      { id: uid(), title: "Prepare kickoff slides", areaId: work.id, projectId: pAlpha.id, prio: 3, due: plus(1), est: 90, star: true, longterm: false, notes: "", done: false, createdAt: Date.now(), groupId: null },
-      { id: uid(), title: "Reply to vendor email", areaId: work.id, projectId: pAlpha.id, prio: 2, due: plus(0), est: 10, star: false, longterm: false, notes: "", done: false, createdAt: Date.now(), groupId: null },
-      { id: uid(), title: "Plan Q4 team offsite", areaId: work.id, projectId: null, prio: 2, due: plus(75), est: 120, star: false, longterm: false, notes: "Venue + agenda.", done: false, createdAt: Date.now(), groupId: null },
-      { id: uid(), title: "Book car service", areaId: priv.id, projectId: pAdmin.id, prio: 2, due: plus(3), est: 15, star: false, longterm: false, notes: "Winter tires too.", done: false, createdAt: Date.now(), groupId: chgTires.id },
-      { id: uid(), title: "Bring the car", areaId: priv.id, projectId: pAdmin.id, prio: 1, due: plus(4), est: null, star: false, longterm: false, notes: "", done: false, createdAt: Date.now(), groupId: chgTires.id },
-      { id: uid(), title: "Fetch the car", areaId: priv.id, projectId: pAdmin.id, prio: 1, due: plus(5), est: null, star: false, longterm: false, notes: "", done: false, createdAt: Date.now(), groupId: chgTires.id },
-      { id: uid(), title: "Schedule dentist appointment", areaId: priv.id, projectId: pAdmin.id, prio: 1, due: "", est: 10, star: false, longterm: false, notes: "", done: false, createdAt: Date.now(), groupId: null },
-      { id: uid(), title: "Renew gym membership", areaId: priv.id, projectId: null, prio: 1, due: plus(-1), est: 5, star: false, longterm: false, notes: "", done: false, createdAt: Date.now(), groupId: null },
-      { id: uid(), title: "Research a language course", areaId: priv.id, projectId: null, prio: 1, due: "", est: null, star: false, longterm: true, notes: "Someday — no rush.", done: false, createdAt: Date.now(), groupId: null }
-    ]
+    todos: []
   };
 }
 
