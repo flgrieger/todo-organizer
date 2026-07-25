@@ -4,7 +4,7 @@ git_commit: f467469d1851eaa58087f9b89fd18d3b3b4c0549
 branch: docs/auto-sync-spec
 topic: "Automatic cross-device sync (iPhone ↔ Mac) via a tiny Cloudflare store"
 tags: [plan, sync, cloudflare, worker, kv, offline-first, localStorage]
-status: ready
+status: done
 ---
 
 # PLAN: Automatic cross-device sync via a tiny Cloudflare store
@@ -290,13 +290,15 @@ newer from the other device — with a visible status pill. (Conflict handling i
       **holds without overwriting** (pill ⚠). Debug traces match the plan's spec exactly.
 
 **Manual Verification**:
-- [ ] With the Worker from Phase 1: open the app in browser A, enter URL + key in the Sync panel →
+- [x] With the Worker from Phase 1: open the app in browser A, enter URL + key in the Sync panel →
       pill shows **Synced ✓**; add a todo → pill flicks **Saving…** then **Synced ✓**.
-- [ ] Open browser B (fresh profile), enter the same URL + key → B loads A's data within seconds.
-- [ ] Add/edit in A; within ~5s (or on focusing B) it appears in B, and vice-versa — no manual step.
-- [ ] Turn off the network → pill shows **Offline**, the app stays fully usable; restore network →
-      it returns to **Synced ✓** and the edit propagates.
-- [ ] Leaving the Sync panel empty → the app behaves exactly as before (no pill, no network calls).
+- [x] Open browser B (fresh profile), enter the same URL + key → B loads A's data within seconds.
+      *(Owner confirmed 2026-07-25. The first fresh-browser connect initially showed a conflict — fixed
+      so a pristine device now adopts silently; re-confirmed clean.)*
+- [x] Add/edit in A; within ~5s (or on focusing B) it appears in B, and vice-versa — no manual step.
+- [x] Turn off the network → pill shows **Offline**, the app stays fully usable; restore network →
+      it returns to **Synced ✓** and the edit propagates. *(Verified via Edge DevTools → Network → Offline.)*
+- [x] Leaving the Sync panel empty → the app behaves exactly as before (no pill, no network calls).
 
 ### Phase 3: Conflict safety (never silently overwrite) + offline robustness
 
@@ -336,12 +338,12 @@ edits reconcile safely on reconnect.
       replaced; offline edit → pill Offline + edit kept → reconnect → pushed to cloud → Synced.
 
 **Manual Verification**:
-- [ ] Force a conflict: load A and B (both connected & in sync); take B **offline**; edit in B;
+- [x] Force a conflict: load A and B (both connected & in sync); take B **offline**; edit in B;
       edit **something different** in A (A pushes, server `rev` advances); bring B **online** →
-      B shows the conflict banner (not a silent overwrite).
-- [ ] From the banner, **Use the newer version** → B adopts A's copy and returns to Synced ✓.
-- [ ] Re-run the conflict, choose **Keep mine** → B's copy wins; A pulls it within seconds.
-- [ ] Throughout, no edit is ever lost without the banner appearing first.
+      B shows the conflict banner (not a silent overwrite). *(Owner confirmed 2026-07-25.)*
+- [x] From the banner, **Use the newer version** → B adopts A's copy and returns to Synced ✓.
+- [x] Re-run the conflict, choose **Keep mine** → B's copy wins; A pulls it within seconds.
+- [x] Throughout, no edit is ever lost without the banner appearing first.
 
 ## Implementation Notes
 
@@ -368,9 +370,14 @@ During implementation, document user feedback, problems, and decisions here.
   close on Escape/scrim — it's a required choice (consistent with the non-dismissable `.imp-banner`);
   the setup *modal* does close on both. (3) Offline-retry is handled by the existing pull `"push"`
   verdict rather than a separate retry path (same effect, less code).
-- **Remaining = owner-side manual verification only** (needs a real Cloudflare deploy + two devices):
-  Phase 1 `curl` round-trip (per `sync-worker/README.md`), Phase 2 two-browser sync, Phase 3 forced
-  conflict. See each phase's Manual Verification checklist.
+- **All manual verification complete (2026-07-25).** The owner deployed the Worker to their own
+  Cloudflare account and confirmed: Phase 1 `curl` round-trip; Phase 2 two-browser sync (both
+  directions, offline→online); Phase 3 forced conflict with both **Keep mine** and **Use the newer
+  version**. One fix landed from testing — a pristine new device now adopts the cloud silently
+  instead of showing a first-connect conflict (commit `70e4f63`). **Status: done.**
+- **Post-merge follow-ups for the owner:** (1) tighten the Worker's `ALLOW_ORIGIN` from `*` to the
+  real `https://<username>.github.io` origin once the app is live on `main`; (2) connect the iPhone
+  (open the live app → Sync… → paste the same URL + key).
 
 ## References
 
