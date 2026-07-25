@@ -2022,6 +2022,10 @@ let syncLoopStarted = false;
 function syncEnabled() { return !!(syncCfg && syncCfg.url && syncCfg.key); }
 // Unpushed local edits? (compares the real-data signature to what we last synced.)
 function dirty() { return contentSig(state) !== syncRuntime.syncedSig; }
+// Does this device hold any real user content yet? (The default empty Work/Private areas from a
+// fresh install don't count.) Used so a brand-new device adopts an existing cloud instead of
+// treating its pristine default state as a conflicting "local edit".
+function hasLocalContent() { return state.todos.length > 0 || state.projects.length > 0 || state.groups.length > 0; }
 function syncUrl() { return syncCfg.url.replace(/\/+$/, "") + "/todos"; }
 function authHeaders(extra) { return Object.assign({ "Authorization": "Bearer " + syncCfg.key }, extra || {}); }
 
@@ -2102,7 +2106,12 @@ async function pullRemote() {
     return;
   }
   const serverRev = body.rev || 0;
-  const decision = classifyPull(serverRev, syncRuntime.serverRev || 0, dirty());
+  // A never-synced device that has no real content of its own shouldn't conflict with an
+  // already-populated cloud — it should just adopt it. So its pristine default state doesn't
+  // count as a local edit for the decision (a device WITH todos still gets the conflict prompt).
+  const pristineFirstConnect = syncRuntime.syncedSig === null && !hasLocalContent();
+  const localDirty = dirty() && !pristineFirstConnect;
+  const decision = classifyPull(serverRev, syncRuntime.serverRev || 0, localDirty);
   console.debug("sync: pull rev=" + serverRev + " (" + decision + ")");
   if (decision === "seed" || decision === "push") {
     syncRuntime.serverRev = serverRev;   // base our push on what the server actually has now
@@ -2121,7 +2130,15 @@ async function pullRemote() {
 // Replace local state with the server's copy (migrate first, exactly like importData), mark this
 // device clean, and re-render — gently keeping the current view where it still makes sense.
 function adoptRemote(data, rev) {
-  if (!data) { syncRuntime.serverRev = rev; syncRuntime.syncedSig = contentSig(state); saveSyncState(); setSyncStatus("synced"); return; }
+  // Guard: only adopt data that actually looks like app state (has areas + todos arrays), so a
+  // stray manual write to the store can never crash migrate()/render(). If it's not adoptable,
+  // push our local copy over it (based on the server's current rev) to clean the store.
+  if (!data || !Array.isArray(data.areas) || !Array.isArray(data.todos)) {
+    console.debug("sync: server data not adoptable — pushing local over it");
+    syncRuntime.serverRev = rev;
+    pushRemote();
+    return;
+  }
   state = migrate(data);
   lastSig = contentSig(state);         // adopting isn't a local edit — don't bump updatedAt or re-push
   reconcileUiAfterStateSwap();

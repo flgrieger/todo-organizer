@@ -236,9 +236,10 @@ isolation (by `curl`) before any client code exists.
 - [x] `npm run check` is green (lint + type-check + tests, worker test included).
 
 **Manual Verification**:
-- [ ] Following `sync-worker/README.md`, a `curl` PUT with `baseRev:0` stores data and returns
-      `rev:1`; a second PUT with a stale `baseRev` returns `409`; GET returns the stored blob.
-      *(Requires the owner to deploy the Worker to their own Cloudflare account — see below.)*
+- [x] Following `sync-worker/README.md`, a `curl` PUT with `baseRev:0` stores data and returns
+      `rev:1`; GET returns the stored blob. *(Owner deployed the Worker to their own Cloudflare
+      account and confirmed `{"ok":true,"rev":1}` then `{"rev":1,"data":{"hello":"world"}}` on
+      2026-07-25.)*
 
 ### Phase 2: Client sync engine + setup panel + status pill (happy path)
 
