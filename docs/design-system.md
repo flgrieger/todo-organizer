@@ -56,6 +56,30 @@ Attribute chips reuse a fixed palette — keep these consistent:
 - **Area colours** (`AREA_COLORS` in JS) are a separate categorical set of 8 distinct hues —
   used only as small per-area dots, not for text.
 
+## Responsive / mobile
+
+Single breakpoint: **`max-width: 720px`** (phone / small tablet). Above it, the desktop
+two-column layout with the sidebar is unchanged. Below it:
+
+- **Sidebar is hidden**; navigation moves to two touch surfaces that `renderNav()` fills from the
+  *same* data as the sidebar (so they never drift):
+  - **Views chip strip** (`.view-chips` / `.view-chip`) under the title — horizontally scrollable
+    pills, active state = `--accent-soft` on `--accent` (mirrors `.fb-chip`).
+  - **"⋯" bottom sheet** (`.nav-sheet`, slides up via `translateY`, own scrim `#navScrim`,
+    `18px 18px 0 0` top radius, `max-height: 82vh`) holding **Areas** (each with its ⋮ menu) and
+    the **Data** actions + "last changed" line.
+- **⋮ row menu** (`.row-menu`) on every area/project row — visible on **both** desktop and mobile
+  (faint `opacity: .55`, full on hover; always-visible + enlarged on touch). Opens Rename / Move /
+  Delete in the shared `#pop` popover. This replaced the old hover-only "⇄" and right-click rename.
+- **Tap targets** grow to ~44px on mobile via **padding, not font size** (checkbox, card chips,
+  nav rows, toolbar controls, filter chips).
+- **Form inputs render at `16px`** on mobile (quick-add, `.pop`, `.field`) so iOS Safari doesn't
+  auto-zoom the page on focus. Desktop density is unchanged.
+- **`100dvh`** (with a `100vh` fallback line before it) on `.app` and `.drawer` so mobile browser
+  chrome can't crop content. The detail drawer goes **full-width** under the breakpoint.
+- The **toolbar wraps** (`flex-wrap`): quick-add takes the full first line, Sort / Arrange / New
+  set wrap beneath.
+
 ## Do / Don't
 
 - **Do** use `--accent` (`#9fe870`) only as a background/fill; put `--accent-ink` text on it.
