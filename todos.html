@@ -131,6 +131,15 @@
     padding: 12px 28px; display: flex; gap: 10px; align-items: center;
     border-bottom: 1px solid var(--line); background: var(--panel);
   }
+  /* Desktop: the wrappers dissolve so .toolbar stays one flat flex row
+     (quickadd · #newGroupBtn · #sortSel · #groupSel); flex `order` restores the
+     intended visual order quick-add | Sort | Arrange | New set. Mobile (≤720px)
+     turns the wrappers into real rows — see the media query. */
+  .stickybar, .tb-add, .tb-arrange { display: contents; }
+  .quickadd { order: 0; }
+  #sortSel   { order: 1; }
+  #groupSel  { order: 2; }
+  #newGroupBtn { order: 3; }
   .quickadd {
     flex: 1; display: flex; align-items: center; gap: 8px;
     background: var(--bg); border: 1px solid var(--line-strong);
@@ -451,9 +460,32 @@
     .topbar, .toolbar, .filterbar, .list-wrap { padding-left: 16px; padding-right: 16px; }
     .imp-banner { margin-left: 16px; margin-right: 16px; }
 
-    /* Toolbar wraps: quick-add takes the whole first line; Sort / Arrange / New set wrap beneath. */
-    .toolbar { flex-wrap: wrap; }
-    .quickadd { flex: 1 0 100%; }
+    /* The header stops being one pinned block: .main becomes the scroll container and .toolbar
+       dissolves (display:contents) so the .stickybar and .tb-arrange row become direct children
+       of .main. Only .stickybar {view-chips + quick-add row} stays pinned (position:sticky); the
+       topbar, Sort/Arrange row and filter bar scroll away and return at the top. */
+    .main { display: block; overflow-y: auto; }
+    .list-wrap { flex: initial; overflow: visible; }
+    .toolbar { display: contents; }
+
+    .stickybar {
+      display: flex; flex-direction: column;
+      position: sticky; top: 0; z-index: 20;
+      background: var(--panel); border-bottom: 1px solid var(--line);
+    }
+    /* Slim bar top row: the view-chips strip (keeps its own h-scroll, loses its divider so the
+       bar reads as one unit). Bottom row: quick-add + 🗂 New set (icon-only), with side padding
+       now that the dissolved .toolbar no longer supplies it. */
+    .view-chips { padding: 8px 16px; border-bottom: none; }
+    .tb-add {
+      flex: none; display: flex; align-items: center; gap: 8px; padding: 0 16px 10px;
+    }
+    .tb-add .quickadd { flex: 1; }
+    .tb-add #newGroupBtn { flex: none; order: 0; }
+    .newset-label { display: none; }
+
+    /* Sort + Arrange become their own scroll-away row just under the slim bar. */
+    .tb-arrange { display: flex; gap: 10px; padding: 10px 16px 12px; }
 
     /* Comfortable tap targets (~44px) — grow padding, not font, where the visual must stay small. */
     .todo { padding: 14px; gap: 14px; }
@@ -462,6 +494,12 @@
     .nav-item { padding: 10px 8px; }
     select.control, .btn { padding: 10px 13px; }
     .fb-chip { padding: 9px 14px; }
+
+    /* "Show only" becomes a single-line horizontal scroll instead of wrapping — the label, chips
+       and Clear keep their size (flex:none) so the strip scrolls sideways rather than squashing. */
+    .filterbar { flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    .filterbar .fb-label, .filterbar .fb-chip, .filterbar .fb-clear { flex: none; }
+    .filterbar .fb-clear { margin-left: 0; }
 
     /* iOS auto-zooms the page when a focused input renders < 16px — pin form inputs to 16px. */
     .quickadd input,
@@ -474,7 +512,7 @@
 
     /* Keep the topbar row (mode toggle · title · ⋯) from overflowing on small phones so the ⋯
        never scrolls off-screen: compact the toggle + gap, and let a long title ellipsis-truncate. */
-    .topbar { gap: 10px; }
+    .topbar { gap: 10px; padding: 10px 16px; }
     .topbar-title { min-width: 0; }
     .topbar h1 { font-size: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .mode-toggle button { padding: 9px 14px; }
@@ -528,27 +566,35 @@
       <button class="nav-toggle" id="navToggle" title="Menu" aria-label="Open menu">⋯</button>
     </div>
 
-    <div class="view-chips" id="viewChips"></div>
-
     <div class="toolbar">
-      <div class="quickadd">
-        <span class="plus">+</span>
-        <input id="quickAdd" type="text" placeholder="Add a todo and press Enter…" />
+      <!-- Mobile: this wrapper is position:sticky and stays pinned while the list scrolls
+           (view-chips + quick-add row). Desktop: display:contents, so the toolbar is one flat row. -->
+      <div class="stickybar">
+        <div class="view-chips" id="viewChips"></div>
+        <div class="tb-add">
+          <div class="quickadd">
+            <span class="plus">+</span>
+            <input id="quickAdd" type="text" placeholder="Add a todo and press Enter…" />
+          </div>
+          <button class="btn" id="newGroupBtn" title="Create a set of related todos"
+                  aria-label="Create a set of related todos">🗂 <span class="newset-label">New set</span></button>
+        </div>
       </div>
-      <select class="control" id="sortSel">
-        <option value="smart">Sort: Smart</option>
-        <option value="due">Sort: Due date</option>
-        <option value="prio">Sort: Priority</option>
-        <option value="est">Sort: Time estimate</option>
-        <option value="created">Sort: Newest</option>
-      </select>
-      <select class="control" id="groupSel">
-        <option value="none">Arrange by: None</option>
-        <option value="project">Arrange by: Project</option>
-        <option value="area">Arrange by: Area</option>
-        <option value="prio">Arrange by: Priority</option>
-      </select>
-      <button class="btn" id="newGroupBtn" title="Create a set of related todos">🗂 New set</button>
+      <div class="tb-arrange">
+        <select class="control" id="sortSel">
+          <option value="smart">Sort: Smart</option>
+          <option value="due">Sort: Due date</option>
+          <option value="prio">Sort: Priority</option>
+          <option value="est">Sort: Time estimate</option>
+          <option value="created">Sort: Newest</option>
+        </select>
+        <select class="control" id="groupSel">
+          <option value="none">Arrange by: None</option>
+          <option value="project">Arrange by: Project</option>
+          <option value="area">Arrange by: Area</option>
+          <option value="prio">Arrange by: Priority</option>
+        </select>
+      </div>
     </div>
 
     <div class="filterbar" id="filterBar"></div>
