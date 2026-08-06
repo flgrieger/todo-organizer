@@ -105,8 +105,25 @@ two-column layout with the sidebar is unchanged. Below it:
   auto-zoom the page on focus. Desktop density is unchanged.
 - **`100dvh`** (with a `100vh` fallback line before it) on `.app` and `.drawer` so mobile browser
   chrome can't crop content. The detail drawer goes **full-width** under the breakpoint.
-- The **toolbar wraps** (`flex-wrap`): quick-add takes the full first line, Sort / Arrange / New
-  set wrap beneath.
+- **Header collapses to a slim sticky bar + scroll-away chrome.** Under the breakpoint `.main`
+  becomes the scroll container (desktop: only `.list-wrap` scrolls) and the toolbar dissolves
+  (`display: contents`) so its regrouped rows become direct children of `.main`. Only the
+  **`.stickybar`** — a wrapper holding the **view-chips strip + the quick-add row** — stays pinned
+  (`position: sticky; top: 0`) with a solid `--panel` background and a `--line` hairline; the
+  **topbar** (mode toggle · title · ⋯), the **Sort/Arrange row** (`.tb-arrange`), and the
+  **"Show only" filter bar** scroll away and return at the top. The sticky wrapper must be a
+  **direct child of the scroll container** (`.main`), which the `display: contents` toolbar
+  guarantees — a sticky element unsticks once its own parent scrolls off. Top paddings are tighter
+  than desktop so the at-top chrome is shorter.
+- **🗂 New set sits inline** to the right of the quick-add input (`.tb-add` wrapper), **icon-only**
+  on mobile (the "New set" text is a `.newset-label` span hidden under the breakpoint — same trick
+  as the sync pill's `.sync-label`).
+- **The "Show only" filter bar is a single-line horizontal scroll** on mobile
+  (`flex-wrap: nowrap; overflow-x: auto`; label/chips/Clear are `flex: none`), instead of wrapping.
+- **One DOM, two layouts.** The toolbar rows (`.stickybar`, `.tb-add`, `.tb-arrange`) are
+  `display: contents` on desktop, so the toolbar collapses back to **one flat flex row**
+  `quick-add | Sort | Arrange | New set` (order restored with flex `order`) — desktop is visually
+  unchanged. They become real rows only under the breakpoint.
 
 ## Do / Don't
 
