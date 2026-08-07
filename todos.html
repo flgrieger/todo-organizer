@@ -559,11 +559,16 @@
     .photo-thumb .rm { width: 26px; height: 26px; font-size: 14px; }
     .img-lightbox .il-close { width: 44px; height: 44px; }
 
-    /* Keep the topbar row (mode toggle · title · ⋯) from overflowing on small phones so the ⋯
-       never scrolls off-screen: compact the toggle + gap, and let a long title ellipsis-truncate. */
-    .topbar { gap: 10px; padding: 10px 16px; }
-    .topbar-title { min-width: 0; }
-    .topbar h1 { font-size: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    /* Two-row topbar on phones so nothing gets squeezed off-screen: row 1 holds the primary
+       Work/Private toggle (left) plus the sync dot + ⋯ menu (right); the view title drops onto
+       its own full-width row below (order:2 + flex-basis:100%) where it can wrap onto a second
+       line instead of being ellipsis-truncated next to the controls. */
+    .topbar { flex-wrap: wrap; gap: 10px 12px; padding: 10px 16px; }
+    .mode-toggle { order: 1; }
+    .mode-div { display: none; }
+    .topbar .spacer, .sync-pill, .nav-toggle { order: 1; }
+    .topbar-title { order: 2; flex-basis: 100%; min-width: 0; }
+    .topbar h1 { font-size: 16px; line-height: 1.25; }
     .mode-toggle button { padding: 9px 14px; }
     /* Save width on phones: the pill collapses to just its status dot (tap it for full settings). */
     .sync-pill .sync-label { display: none; }
