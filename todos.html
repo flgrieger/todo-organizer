@@ -1045,7 +1045,71 @@ function renderData(...boxes) {
 // Mobile "⋯" bottom sheet — Areas + Data. Its own scrim (#navScrim) dismisses it independently
 // of the detail drawer. No-ops harmlessly on desktop, where the sheet is never open.
 function openNavSheet() { $("#navScrim").classList.add("open"); $("#navSheet").classList.add("open"); }
-function closeNavSheet() { $("#navScrim").classList.remove("open"); $("#navSheet").classList.remove("open"); }
+function closeNavSheet() {
+  $("#navScrim").classList.remove("open");
+  const s = $("#navSheet");
+  s.classList.remove("open");
+  // Clear any leftover inline drag styles so a close mid-drag can't leave the sheet half-dragged.
+  s.style.transform = "";
+  s.style.transition = "";
+}
+
+// Swipe-down-to-close for the mobile bottom sheet (follow-finger). The gesture begins on the
+// drag handle, or anywhere on the sheet while its body is scrolled to the top (so dragging a
+// long Areas list scrolls it instead of dismissing). No-ops on desktop, where the sheet never opens.
+// The close-vs-spring-back decision is the pure shouldCloseSheet() in logic.js.
+function initNavSheetSwipe() {
+  const sheet = $("#navSheet");
+  const body = sheet.querySelector(".nav-sheet-body");
+  let startY = 0, lastY = 0, lastT = 0, velocity = 0, dragging = false, eligible = false;
+
+  sheet.addEventListener("touchstart", (e) => {
+    if (!sheet.classList.contains("open") || e.touches.length !== 1) return;
+    const onHandle = e.target.closest(".nav-sheet-handle");
+    // Eligible if grabbing the handle, or if the scrollable body is already at the top.
+    eligible = !!onHandle || (body ? body.scrollTop <= 0 : true);
+    if (!eligible) return;
+    startY = lastY = e.touches[0].clientY;
+    lastT = e.timeStamp;
+    velocity = 0;
+    dragging = false;
+  }, { passive: true });
+
+  sheet.addEventListener("touchmove", (e) => {
+    if (!eligible || e.touches.length !== 1) return;
+    const y = e.touches[0].clientY;
+    const dy = y - startY;
+    // Before the drag has started, a first move that isn't clearly downward means the user is
+    // scrolling up — hand control back to the list and stop tracking this gesture.
+    if (!dragging && dy < 0) { eligible = false; return; }
+    if (!dragging && dy <= 0) return; // no movement yet — keep waiting
+    dragging = true;
+    const dt = e.timeStamp - lastT;
+    if (dt > 0) velocity = (y - lastY) / dt;
+    lastY = y; lastT = e.timeStamp;
+    // Follow the finger 1:1 (suppress the CSS transition), clamped so the sheet never lifts
+    // above its open position even if the finger moves back up above the start point.
+    sheet.style.transition = "none";
+    sheet.style.transform = `translateY(${Math.max(0, dy)}px)`;
+    e.preventDefault(); // stop the page/body from scrolling while we drag the sheet
+  }, { passive: false });
+
+  const end = () => {
+    if (!dragging) { eligible = false; return; }
+    const dy = lastY - startY;
+    const height = sheet.getBoundingClientRect().height;
+    dragging = false; eligible = false;
+    if (shouldCloseSheet(dy, velocity, height)) {
+      closeNavSheet();
+    } else {
+      // Spring back: restore the transition and clear the inline transform so .open re-applies.
+      sheet.style.transition = "";
+      sheet.style.transform = "";
+    }
+  };
+  sheet.addEventListener("touchend", end, { passive: true });
+  sheet.addEventListener("touchcancel", end, { passive: true });
+}
 
 // Groups that belong to the current browse view (used to place clusters, incl. empties).
 function groupsInView() {
@@ -2533,6 +2597,7 @@ $("#addAreaBtn").addEventListener("click", addArea);
 // so the sidebar and the mobile sheet each get their own working buttons + file input.
 $("#navToggle").addEventListener("click", openNavSheet);
 $("#navScrim").addEventListener("click", closeNavSheet);
+initNavSheetSwipe();
 
 // Sync: the pill and the modal (one-time per-device setup).
 $("#syncPill").addEventListener("click", openSyncModal);

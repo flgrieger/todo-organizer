@@ -210,6 +210,20 @@ function fitDimensions(w, h, max) {
 }
 
 /**
+ * Decide whether a swipe-down on the mobile bottom sheet should close it (vs. spring back).
+ * Pure so the threshold logic can be unit-tested without any touch events.
+ *
+ * @param {number} dy        Downward drag distance in px (0 at the top, grows as the sheet is pulled down).
+ * @param {number} velocity  Downward drag velocity in px/ms over the last move (a quick flick is high).
+ * @param {number} height    The sheet's current height in px (used for the distance threshold).
+ * @returns {boolean} True to close: either dragged past ~1/3 of the sheet (capped at 140px) OR a downward flick.
+ */
+function shouldCloseSheet(dy, velocity, height) {
+  const distanceThreshold = Math.min(140, (height || 0) / 3);
+  return dy >= distanceThreshold || velocity > 0.5;
+}
+
+/**
  * Decide what a pull should do, given the server's current `rev`, the `rev` we last synced to,
  * and whether this device has unpushed local edits. The heart of pull-time sync behaviour —
  * pure so it can be unit-tested without any network. Never overwrites on its own: a genuine
@@ -277,5 +291,6 @@ if (typeof module !== "undefined" && module.exports) {
     noFilters, uid, fitDimensions, todayISO, daysUntil, fmtDue, fmtEst,
     isQuickWin, LONGTERM_DAYS, isLongTerm, FILTERS, passesFilters,
     smartScore, groupScore, isGroupComplete, sortTodos, migrate, classifyPull,
+    shouldCloseSheet,
   };
 }
