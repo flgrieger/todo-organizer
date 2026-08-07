@@ -217,3 +217,29 @@ test("migrate converts subtasks into a set losslessly", () => {
   // subtasks field is gone everywhere.
   assert.ok(out.todos.every((t) => t.subtasks === undefined));
 });
+
+test("shouldCloseSheet: small drag springs back", () => {
+  // 30px on a 400px sheet is under the ~133px (400/3) threshold, and not a flick.
+  assert.strictEqual(L.shouldCloseSheet(30, 0.1, 400), false);
+});
+
+test("shouldCloseSheet: big drag closes", () => {
+  // 150px clears the 140px cap even on a tall sheet.
+  assert.strictEqual(L.shouldCloseSheet(150, 0.1, 600), true);
+});
+
+test("shouldCloseSheet: quick flick closes even on a short drag", () => {
+  assert.strictEqual(L.shouldCloseSheet(20, 0.8, 400), true);
+});
+
+test("shouldCloseSheet: distance threshold caps at 140px on tall sheets", () => {
+  // On a 900px sheet, 900/3 = 300, but the cap keeps it at 140 — so 141px closes.
+  assert.strictEqual(L.shouldCloseSheet(141, 0, 900), true);
+  assert.strictEqual(L.shouldCloseSheet(139, 0, 900), false);
+});
+
+test("shouldCloseSheet: short sheet uses the 1/3 distance, not the cap", () => {
+  // 240px sheet → threshold 80px. 90px closes, 70px springs back.
+  assert.strictEqual(L.shouldCloseSheet(90, 0, 240), true);
+  assert.strictEqual(L.shouldCloseSheet(70, 0, 240), false);
+});
