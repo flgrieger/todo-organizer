@@ -1600,7 +1600,7 @@ function addTaskToGroup(gid, title) {
   const g = groupById(gid);
   if (!g) return;
   state.todos.unshift({ id: uid(), title, areaId: g.areaId, projectId: g.projectId,
-    prio: 1, due: "", est: null, star: false, longterm: false, notes: "", done: false, createdAt: Date.now(), groupId: gid, images: [] });
+    prio: 2, due: "", est: null, star: false, longterm: false, notes: "", done: false, createdAt: Date.now(), groupId: gid, images: [] });
   render();               // render() persists via save(); ui.addTaskGroupId stays set so the row reopens
 }
 
@@ -1610,9 +1610,9 @@ function addTodo(title) {
   let areaId = state.areas.find(a => a.scope === ui.mode)?.id, projectId = null;
   if (ui.view === "area") { areaId = ui.areaId; projectId = ui.projectId || null; }
   if (!areaId) { alert("Add an area first (use + next to Areas)."); return; }
-  const t = { id: uid(), title, areaId, projectId, prio: 1, due: "", est: null, star: false, longterm: false, notes: "", done: false, createdAt: Date.now(), groupId: null, images: [] };
+  const t = { id: uid(), title, areaId, projectId, prio: 2, due: "", est: null, star: false, longterm: false, notes: "", done: false, createdAt: Date.now(), groupId: null, images: [] };
   state.todos.unshift(t);
-  ui.filters = noFilters();   // a fresh todo (Low prio, no star/due) wouldn't match active filters — don't let it vanish
+  ui.filters = noFilters();   // a fresh todo (no star/due, not high-prio) wouldn't match active filters — don't let it vanish
   render();
 }
 
@@ -1869,7 +1869,7 @@ function newGroup(preAssign) {
   if (ui.view === "area") { areaId = ui.areaId; projectId = ui.projectId || null; }
   if (preAssign) { areaId = preAssign.areaId; projectId = preAssign.projectId || null; }
   if (!areaId) { alert("Add an area first (use + next to Areas)."); return; }
-  const g = { id: uid(), name: "New set", prio: 1, areaId, projectId, due: "", createdAt: Date.now() };
+  const g = { id: uid(), name: "New set", prio: 2, areaId, projectId, due: "", createdAt: Date.now() };
   state.groups.push(g);
   if (preAssign) { preAssign.groupId = g.id; preAssign.areaId = g.areaId; preAssign.projectId = g.projectId; }
   render();
@@ -1995,7 +1995,7 @@ function renderGroupDrawer() {
   ga.onkeydown = e => {
     if (e.key === "Enter" && ga.value.trim()) {
       state.todos.unshift({ id: uid(), title: ga.value.trim(), areaId: g.areaId, projectId: g.projectId,
-        prio: 1, due: "", est: null, star: false, longterm: false, notes: "", done: false, createdAt: Date.now(), groupId: g.id, images: [] });
+        prio: 2, due: "", est: null, star: false, longterm: false, notes: "", done: false, createdAt: Date.now(), groupId: g.id, images: [] });
       renderGroupDrawer(); render();
       $("#gAddTask").focus();
     }
@@ -2201,7 +2201,7 @@ function importTodos(items, scope) {
     if (seen.has(key)) return;
     state.todos.unshift({
       id: uid(), title: it.text, areaId: inbox.id, projectId: null,
-      prio: 1, due: "", est: null, star: false, longterm: false,
+      prio: 2, due: "", est: null, star: false, longterm: false,
       notes: it.noteTitle ? "From Notes: " + it.noteTitle : "",
       done: false, createdAt: Date.now(), groupId: null, images: [],
       source: { noteId: it.noteId, text: it.text }
