@@ -131,6 +131,29 @@ test("FILTERS exposes the four attribute toggles", () => {
   assert.deepStrictEqual(L.FILTERS.map((f) => f.key), ["high", "overdue", "quickwin", "star"]);
 });
 
+test("fitDimensions scales the longest edge to max, preserving aspect ratio", () => {
+  // Landscape: longest edge (width) capped to max, height scaled proportionally.
+  assert.deepStrictEqual(L.fitDimensions(2000, 1000, 1024), { w: 1024, h: 512 });
+  // Portrait: longest edge (height) capped to max.
+  assert.deepStrictEqual(L.fitDimensions(1000, 2000, 1024), { w: 512, h: 1024 });
+  // Square.
+  assert.deepStrictEqual(L.fitDimensions(4096, 4096, 1024), { w: 1024, h: 1024 });
+  // Already smaller than max: no upscaling.
+  assert.deepStrictEqual(L.fitDimensions(800, 600, 1024), { w: 800, h: 600 });
+  // Exact-max boundary: unchanged (longest === max is not > max).
+  assert.deepStrictEqual(L.fitDimensions(1024, 768, 1024), { w: 1024, h: 768 });
+  // Never collapses a very-thin edge below 1px.
+  assert.deepStrictEqual(L.fitDimensions(5000, 3, 1024), { w: 1024, h: 1 });
+});
+
+test("migrate defaults images to [] and preserves an existing array", () => {
+  const missing = L.migrate({ areas: [{ id: "a", name: "Home" }], todos: [{ id: "t", title: "x", areaId: "a" }] });
+  assert.deepStrictEqual(missing.todos[0].images, []);
+  const imgs = [{ id: "i", data: "data:image/jpeg;base64,x", addedAt: 5 }];
+  const kept = L.migrate({ areas: [{ id: "a", name: "Home" }], todos: [{ id: "t", title: "x", areaId: "a", images: imgs }] });
+  assert.deepStrictEqual(kept.todos[0].images, imgs);
+});
+
 test("migrate adds missing defaults", () => {
   const s = { areas: [{ id: "a", name: "Büro" }], todos: [{ id: "t", title: "x", areaId: "a" }] };
   const out = L.migrate(s);

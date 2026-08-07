@@ -125,6 +125,31 @@ two-column layout with the sidebar is unchanged. Below it:
   `quick-add | Sort | Arrange | New set` (order restored with flex `order`) — desktop is visually
   unchanged. They become real rows only under the breakpoint.
 
+## Photo attachments (todo drawer)
+
+A **Photos** section sits under Notes in the todo drawer, rendering `todo.images` (downscaled
+JPEG data-URLs) as a small thumbnail grid.
+
+- **`.photos`** — a `flex-wrap` grid (8px gap).
+- **`.photo-thumb`** — a fixed `72px` box (`84px` on mobile), `object-fit: cover`, `--line`
+  border, `--radius-sm`. Holds the image (`cursor: zoom-in`) and an absolutely-positioned
+  **`.rm`** remove ✕ (dark circle top-right, `--red` on hover).
+- **`.photo-add`** — a **full-width dashed** (`--line-strong`) bar on its own row under the
+  thumbnails, in `--ink-faint`; the picker trigger (a `<label>` wrapping a hidden file input) and
+  the visible drop hint. **`.photo-add.drag`** is the drag-over state (`--accent` border on
+  `--accent-soft`). Attach paths: file/camera picker (all devices), drag-and-drop and paste
+  (desktop) — all funnel through one `addImagesToTodo()`. The **entire open todo drawer** is the
+  drop target (drag handlers on the persistent `#drawer`, gated on `ui.openId` + `dataTransfer`
+  carrying `Files`), so dragging a file anywhere onto the side sheet reacts immediately and
+  highlights `.photo-add`; only files are intercepted, so dragging text within Notes is untouched.
+- **`.img-lightbox`** — a built-on-demand full-screen overlay (`z-index: 70`, dark scrim) centering
+  the image at `max 90%`, with an **`.il-close`** ✕ top-right. Closes on ✕, backdrop click, or Esc
+  (Esc dismisses the lightbox first, leaving the drawer open). Uses design tokens only.
+
+Images are **compressed** (≤1024px longest edge, JPEG ~0.70) before storage and **deleted when the
+todo is marked done**, so inline storage / sync payloads stay small. A list card shows a
+non-editable **`📎 N`** chip when a todo has photos.
+
 ## Do / Don't
 
 - **Do** use `--accent` (`#9fe870`) only as a background/fill; put `--accent-ink` text on it.

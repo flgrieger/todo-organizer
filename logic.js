@@ -7,6 +7,13 @@
 // NO DOM access, NO reads of the app's `state`/`ui` — everything comes in as arguments.
 
 /**
+ * @typedef {Object} ImageAttachment
+ * @property {string} id
+ * @property {string} data          // "data:image/jpeg;base64,…" (downscaled)
+ * @property {number} addedAt
+ */
+
+/**
  * @typedef {Object} Todo
  * @property {string} id
  * @property {string} title
@@ -21,6 +28,7 @@
  * @property {boolean} done
  * @property {number} createdAt
  * @property {string|null} groupId
+ * @property {ImageAttachment[]} [images]
  */
 
 /**
@@ -191,6 +199,17 @@ function passesFilters(t, filters) { return FILTERS.every((f) => !filters[f.key]
 function uid() { return Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4); }
 
 /**
+ * @param {number} w @param {number} h @param {number} max
+ * @returns {{w:number,h:number}} Scaled to fit `max` on the longest edge; never upscaled.
+ */
+function fitDimensions(w, h, max) {
+  const longest = Math.max(w, h);
+  if (longest <= max) return { w: Math.round(w), h: Math.round(h) };
+  const k = max / longest;
+  return { w: Math.max(1, Math.round(w * k)), h: Math.max(1, Math.round(h * k)) };
+}
+
+/**
  * Decide what a pull should do, given the server's current `rev`, the `rev` we last synced to,
  * and whether this device has unpushed local edits. The heart of pull-time sync behaviour —
  * pure so it can be unit-tested without any network. Never overwrites on its own: a genuine
@@ -232,6 +251,7 @@ function migrate(s) {
   // detectable as "unknown" on import rather than being silently stamped as fresh.
   if (typeof s.updatedAt !== "number") s.updatedAt = 0;
   (s.todos || []).forEach((t) => { if (t.groupId === undefined) t.groupId = null; });
+  (s.todos || []).forEach((t) => { if (!Array.isArray(t.images)) t.images = []; });
   const newTasks = [];
   (s.todos || []).forEach((t) => {
     if (Array.isArray(t.subtasks) && t.subtasks.length && !t.groupId) {
@@ -243,7 +263,7 @@ function migrate(s) {
       t.subtasks.forEach((st) => newTasks.push({
         id: uid(), title: st.title, areaId: g.areaId, projectId: g.projectId,
         prio: 1, due: "", est: null, star: false, longterm: false, notes: "",
-        done: !!st.done, createdAt: g.createdAt, groupId: g.id }));
+        done: !!st.done, createdAt: g.createdAt, groupId: g.id, images: [] }));
     }
   });
   s.todos.push(...newTasks);
@@ -254,7 +274,7 @@ function migrate(s) {
 // @ts-ignore -- Node-only export; `module` is undefined in the browser.
 if (typeof module !== "undefined" && module.exports) {
   module.exports = {
-    noFilters, uid, todayISO, daysUntil, fmtDue, fmtEst,
+    noFilters, uid, fitDimensions, todayISO, daysUntil, fmtDue, fmtEst,
     isQuickWin, LONGTERM_DAYS, isLongTerm, FILTERS, passesFilters,
     smartScore, groupScore, isGroupComplete, sortTodos, migrate, classifyPull,
   };

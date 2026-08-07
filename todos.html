@@ -403,6 +403,49 @@
   .sub-add { display: flex; align-items: center; gap: 8px; padding: 6px 0; }
   .sub-add input { flex: 1; border: none; border-bottom: 1px dashed var(--line-strong); background: none; outline: none; padding: 4px 2px; }
 
+  /* ---------- Photo attachments (drawer) ---------- */
+  .photos { display: flex; flex-wrap: wrap; gap: 8px; }
+  .photo-thumb {
+    position: relative; width: 72px; height: 72px; flex: none;
+    border: 1px solid var(--line); border-radius: var(--radius-sm); overflow: hidden; background: var(--bg);
+  }
+  .photo-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; cursor: zoom-in; }
+  .photo-thumb .rm {
+    position: absolute; top: 2px; right: 2px; width: 20px; height: 20px; border-radius: 50%;
+    border: none; background: rgba(20,22,26,.6); color: #fff; font-size: 12px; line-height: 1;
+    display: flex; align-items: center; justify-content: center; padding: 0;
+  }
+  .photo-thumb .rm:hover { background: var(--red); }
+  /* Full-width drop zone / picker trigger — sits on its own row under the thumbnails, so the
+     whole side sheet reads as "drop here". The entire open todo drawer is also a drop target
+     (see the drag handlers), and this bar is what highlights while a file is dragged over it.
+     Scoped as `.photos .photo-add` so it out-specifies the global `.field label` rule (which
+     would otherwise force display:block / uppercase / margin-bottom on this <label>). */
+  .photos .photo-add {
+    display: flex; align-items: center; justify-content: center; gap: 6px;
+    flex: 1 0 100%; width: 100%; min-height: 52px; margin: 0;
+    border: 1.5px dashed var(--line-strong); border-radius: var(--radius-sm); background: none;
+    color: var(--ink-faint); font-size: 12.5px; font-weight: 500; text-transform: none;
+    letter-spacing: normal; text-align: center; padding: 10px; cursor: pointer; line-height: 1.2;
+    transition: border-color .12s, color .12s, background .12s;
+  }
+  .photos .photo-add:hover { border-color: var(--forest); color: var(--forest); }
+  .photos .photo-add .pa-plus { font-size: 16px; }
+  .photos .photo-add.drag { border-color: var(--accent); background: var(--accent-soft); color: var(--forest); }
+
+  /* Full-size photo overlay (built on demand in JS). Sits above the drawer. */
+  .img-lightbox {
+    position: fixed; inset: 0; z-index: 70; background: rgba(20,22,26,.82);
+    display: flex; align-items: center; justify-content: center; padding: 24px;
+  }
+  .img-lightbox img { max-width: 90%; max-height: 90%; border-radius: 8px; box-shadow: 0 10px 40px rgba(0,0,0,.5); }
+  .img-lightbox .il-close {
+    position: absolute; top: 16px; right: 18px; width: 40px; height: 40px; border-radius: 50%;
+    border: none; background: rgba(255,255,255,.14); color: #fff; font-size: 20px; line-height: 1;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .img-lightbox .il-close:hover { background: rgba(255,255,255,.28); }
+
   .drawer-foot { padding: 14px 20px; border-top: 1px solid var(--line); display: flex; gap: 10px; }
   .btn.danger { color: var(--red); border-color: transparent; }
   .btn.danger:hover { border-color: var(--red); background: #fdeceb; }
@@ -509,6 +552,12 @@
 
     /* Detail drawer fills the phone screen; its foot buttons stay reachable at the bottom. */
     .drawer { width: 100%; max-width: 100%; }
+
+    /* Roomier photo thumbnails + a taller drop bar so they're easy to tap. */
+    .photo-thumb { width: 84px; height: 84px; }
+    .photos .photo-add { min-height: 60px; }
+    .photo-thumb .rm { width: 26px; height: 26px; font-size: 14px; }
+    .img-lightbox .il-close { width: 44px; height: 44px; }
 
     /* Keep the topbar row (mode toggle · title · ⋯) from overflowing on small phones so the ⋯
        never scrolls off-screen: compact the toggle + gap, and let a long title ellipsis-truncate. */
@@ -682,6 +731,10 @@
 const STORE_KEY = "todo_overview_v1";
 const AREA_COLORS = ["#3b6ea5","#3f9c5a","#c98a1a","#8a5cc9","#c14a3f","#2a9d9d","#c94a86","#6b7280"];
 
+// Photo attachments are downscaled before storage so they stay cheap in localStorage/sync/backups.
+const IMG_MAX_EDGE = 1024;   // longest edge, in px, after downscaling (never upscales a smaller image)
+const IMG_QUALITY = 0.7;     // JPEG re-encode quality
+
 // Optional Apple Notes import: a local helper (see notes-helper/) serves TODO: lines here.
 // If it isn't running, fetches fail silently and the app behaves exactly as before.
 const NOTES_HELPER_URL = "http://localhost:8787/todos";
@@ -708,15 +761,29 @@ function load() {
 // migrate() and uid() live in logic.js (loaded above) — see the safety-net note in CLAUDE.md.
 // Stamp updatedAt only when the real data changed (see contentSig above), so opening the
 // app / switching mode / sorting / filtering never makes this device look "newer".
+// Returns true on a successful write, false if the browser store is full (QuotaExceededError) —
+// so callers that can fill the quota (photo attach) can roll back and warn instead of crashing.
+// The updatedAt/sync bookkeeping only commits when the write actually lands, so a failed write
+// doesn't leave this device looking "newer" than a copy it never persisted.
 function save() {
   const sig = contentSig(state);
-  if (sig !== lastSig) {
-    state.updatedAt = Date.now(); lastSig = sig;
+  const changed = sig !== lastSig;
+  const prevStamp = state.updatedAt;
+  if (changed) state.updatedAt = Date.now();
+  try {
+    localStorage.setItem(STORE_KEY, JSON.stringify(state));
+  } catch (e) {
+    state.updatedAt = prevStamp;   // roll back the stamp bump; nothing was persisted
+    console.debug("images: storage full — rolled back attachment");
+    return false;
+  }
+  if (changed) {
+    lastSig = sig;
     // A genuine data change is the one thing worth pushing to the cloud (debounced).
     // No-op unless sync is configured on this device — otherwise the app is unchanged.
     if (typeof syncEnabled === "function" && syncEnabled()) scheduleSync();
   }
-  localStorage.setItem(STORE_KEY, JSON.stringify(state));
+  return true;
 }
 
 // A fresh install starts empty — just the two mode areas (Work, Private), ready for
@@ -1350,6 +1417,13 @@ function todoCard(t, opts = {}) {
     const g = groupById(t.groupId);
     if (g) meta.appendChild(el("span", "chip group-tag", "🗂 " + g.name));
   }
+  // Photo indicator — non-editable count of attached images.
+  if (t.images && t.images.length) {
+    const n = t.images.length;
+    const chip = el("span", "chip", "📎 " + n);
+    chip.title = n + " photo" + (n === 1 ? "" : "s");
+    meta.appendChild(chip);
+  }
   body.appendChild(meta);
 
   card.appendChild(body);
@@ -1504,6 +1578,9 @@ function startGroupCelebration(gid) {
 function toggleDone(t) {
   t.done = !t.done;
   t.completedAt = t.done ? Date.now() : null;
+  // Completing a todo permanently drops its photos — keeps stored images naturally bounded.
+  // Un-ticking does NOT restore them (they're already gone).
+  if (t.done) t.images = [];
   // If this tick just completed a set, celebrate briefly before it leaves the active list.
   if (t.done && t.groupId) {
     const g = groupById(t.groupId);
@@ -1523,7 +1600,7 @@ function addTaskToGroup(gid, title) {
   const g = groupById(gid);
   if (!g) return;
   state.todos.unshift({ id: uid(), title, areaId: g.areaId, projectId: g.projectId,
-    prio: 1, due: "", est: null, star: false, longterm: false, notes: "", done: false, createdAt: Date.now(), groupId: gid });
+    prio: 1, due: "", est: null, star: false, longterm: false, notes: "", done: false, createdAt: Date.now(), groupId: gid, images: [] });
   render();               // render() persists via save(); ui.addTaskGroupId stays set so the row reopens
 }
 
@@ -1533,7 +1610,7 @@ function addTodo(title) {
   let areaId = state.areas.find(a => a.scope === ui.mode)?.id, projectId = null;
   if (ui.view === "area") { areaId = ui.areaId; projectId = ui.projectId || null; }
   if (!areaId) { alert("Add an area first (use + next to Areas)."); return; }
-  const t = { id: uid(), title, areaId, projectId, prio: 1, due: "", est: null, star: false, longterm: false, notes: "", done: false, createdAt: Date.now(), groupId: null };
+  const t = { id: uid(), title, areaId, projectId, prio: 1, due: "", est: null, star: false, longterm: false, notes: "", done: false, createdAt: Date.now(), groupId: null, images: [] };
   state.todos.unshift(t);
   ui.filters = noFilters();   // a fresh todo (Low prio, no star/due) wouldn't match active filters — don't let it vanish
   render();
@@ -1683,6 +1760,13 @@ function renderTodoDrawer() {
     grps.map(g => `<option value="${g.id}" ${g.id === t.groupId ? "selected" : ""}>${escapeHtml(g.name)}</option>`).join("") +
     `<option value="__new">+ New set…</option>`;
 
+  const imgs = Array.isArray(t.images) ? t.images : [];
+  const thumbsHtml = imgs.map(im =>
+    `<div class="photo-thumb" data-id="${im.id}">
+       <img src="${escapeAttr(im.data)}" alt="Attached photo" />
+       <button class="rm" data-act="rm" title="Remove photo">✕</button>
+     </div>`).join("");
+
   $("#drawerBody").innerHTML = `
     <div class="field">
       <label>Title</label>
@@ -1731,6 +1815,16 @@ function renderTodoDrawer() {
       <label>Notes</label>
       <textarea id="fNotes" placeholder="Details, links, context…">${escapeHtml(t.notes || "")}</textarea>
     </div>
+    <div class="field">
+      <label>Photos</label>
+      <div class="photos" id="fPhotos">
+        ${thumbsHtml}
+        <label class="photo-add" id="fPhotoAdd" title="Attach JPG or PNG photos">
+          <input type="file" accept="image/png,image/jpeg" multiple hidden id="fPhotoInput" />
+          <span class="pa-plus">＋</span> Add photos
+        </label>
+      </div>
+    </div>
     <div style="font-size:11.5px;color:var(--ink-faint)">Created ${new Date(t.createdAt).toLocaleDateString()}</div>
   `;
 
@@ -1749,6 +1843,21 @@ function renderTodoDrawer() {
   $("#fLongterm").onclick = () => { t.longterm = !t.longterm; renderDrawer(); render(); };
   $("#fPrio").querySelectorAll("button").forEach(b => {
     b.onclick = () => { t.prio = parseInt(b.dataset.p, 10); renderDrawer(); render(); };
+  });
+
+  // Photos: pick (input), remove (✕ per thumb), and enlarge (click a thumbnail).
+  $("#fPhotoInput").onchange = e => { addImagesToTodo(t, e.target.files); e.target.value = ""; };
+  $("#fPhotos").querySelectorAll(".photo-thumb").forEach(el2 => {
+    const id = el2.dataset.id;
+    el2.querySelector("img").onclick = () => {
+      const im = (t.images || []).find(x => x.id === id);
+      if (im) openImageLightbox(im.data);
+    };
+    el2.querySelector('[data-act=rm]').onclick = e => {
+      e.preventDefault(); e.stopPropagation();
+      t.images = (t.images || []).filter(x => x.id !== id);
+      save(); renderDrawer(); render();
+    };
   });
 }
 
@@ -1886,7 +1995,7 @@ function renderGroupDrawer() {
   ga.onkeydown = e => {
     if (e.key === "Enter" && ga.value.trim()) {
       state.todos.unshift({ id: uid(), title: ga.value.trim(), areaId: g.areaId, projectId: g.projectId,
-        prio: 1, due: "", est: null, star: false, longterm: false, notes: "", done: false, createdAt: Date.now(), groupId: g.id });
+        prio: 1, due: "", est: null, star: false, longterm: false, notes: "", done: false, createdAt: Date.now(), groupId: g.id, images: [] });
       renderGroupDrawer(); render();
       $("#gAddTask").focus();
     }
@@ -1895,6 +2004,80 @@ function renderGroupDrawer() {
 
 let refreshTimer = null;
 function scheduleListRefresh() { clearTimeout(refreshTimer); refreshTimer = setTimeout(() => { renderList(); renderNav(); }, 350); }
+
+/* ============================ Photo attachments ============================ */
+// Photos live inline on the todo (t.images: [{ id, data, addedAt }]) as downscaled JPEG
+// data-URLs, so they persist in localStorage, sync, and ride along in JSON backups with no
+// new storage mechanism. They're deleted on done (toggleDone) so storage stays bounded.
+
+// Shrink a File to a JPEG data-URL: load into an <img>, size a <canvas> via fitDimensions()
+// (never upscales), draw, and re-encode. Rejects on a load error (e.g. corrupt file).
+function downscaleImage(file) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      try {
+        const { w, h } = fitDimensions(img.naturalWidth, img.naturalHeight, IMG_MAX_EDGE);
+        const canvas = document.createElement("canvas");
+        canvas.width = w; canvas.height = h;
+        const ctx = canvas.getContext("2d");
+        // Flatten any transparency onto white (PNGs re-encode to JPEG — see plan decision #2).
+        ctx.fillStyle = "#ffffff"; ctx.fillRect(0, 0, w, h);
+        ctx.drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL("image/jpeg", IMG_QUALITY));
+      } catch (e) { reject(e); } finally { URL.revokeObjectURL(url); }
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("image load failed")); };
+    img.src = url;
+  });
+}
+
+// The single shared attach entry — fed by the picker, drag-drop, and paste. Filters to JPG/PNG,
+// downscales each, and saves after every push so a quota failure rolls back only that one photo
+// and stops (never throws into render(); mirrors the sync/notes "never crash" pattern).
+async function addImagesToTodo(t, files) {
+  if (!t) return;
+  if (!Array.isArray(t.images)) t.images = [];
+  const imgs = [...(files || [])];
+  if (!imgs.length) return;
+  const ok = imgs.filter(f => f.type === "image/jpeg" || f.type === "image/png");
+  if (ok.length !== imgs.length) {
+    alert("Only JPG and PNG images can be attached — other files were skipped.");
+  }
+  for (const file of ok) {
+    let data;
+    try { data = await downscaleImage(file); }
+    catch (e) { console.debug("images: could not read a file — skipping"); continue; }
+    t.images.push({ id: uid(), data, addedAt: Date.now() });
+    if (!save()) {
+      t.images.pop();   // roll back the photo we couldn't persist
+      alert("Storage is full — that photo couldn't be saved. Mark some done todos complete to free space.");
+      break;
+    }
+  }
+  renderDrawer();
+  render();
+}
+
+// Full-size viewer: a single reusable overlay built on demand, closed by ✕, backdrop, or Esc.
+let imgLightboxEl = null;
+function openImageLightbox(dataUrl) {
+  closeImageLightbox();
+  const box = el("div", "img-lightbox");
+  box.onclick = e => { if (e.target === box) closeImageLightbox(); };
+  const close = el("button", "il-close", "✕");
+  close.title = "Close";
+  close.onclick = closeImageLightbox;
+  const img = el("img"); img.src = dataUrl; img.alt = "Attached photo";
+  box.appendChild(img);
+  box.appendChild(close);
+  document.body.appendChild(box);
+  imgLightboxEl = box;
+}
+function closeImageLightbox() {
+  if (imgLightboxEl) { imgLightboxEl.remove(); imgLightboxEl = null; }
+}
 
 /* ============================ Export / Import ============================ */
 function exportData() {
@@ -2020,7 +2203,7 @@ function importTodos(items, scope) {
       id: uid(), title: it.text, areaId: inbox.id, projectId: null,
       prio: 1, due: "", est: null, star: false, longterm: false,
       notes: it.noteTitle ? "From Notes: " + it.noteTitle : "",
-      done: false, createdAt: Date.now(), groupId: null,
+      done: false, createdAt: Date.now(), groupId: null, images: [],
       source: { noteId: it.noteId, text: it.text }
     });
     state.importedKeys.push(key);
@@ -2368,7 +2551,59 @@ $("#deleteBtn").addEventListener("click", () => {
 });
 $("#doneBtn").addEventListener("click", () => { const t = currentTodo(); if (t) { toggleDone(t); renderDrawer(); } });
 $("#starBtn").addEventListener("click", () => { const t = currentTodo(); if (t) { t.star = !t.star; renderDrawer(); render(); } });
-document.addEventListener("keydown", e => { if (e.key === "Escape") { closePop(); closeDrawer(); closeNavSheet(); closeSyncModal(); } });
+
+// Desktop attach convenience: drag a JPG/PNG anywhere onto the OPEN todo drawer (the whole
+// side sheet is the drop target, so it reacts the instant a file is dragged over it — you don't
+// have to hit the small tile). Only files are intercepted, so dragging text inside Notes is
+// untouched, and the group drawer (no ui.openId) never accepts photos.
+const drawerEl = $("#drawer");
+const draggingFiles = e => e.dataTransfer && Array.from(e.dataTransfer.types || []).includes("Files");
+const setDropHint = on => { const z = $("#fPhotoAdd"); if (z) z.classList.toggle("drag", on); };
+["dragenter", "dragover"].forEach(ev => drawerEl.addEventListener(ev, e => {
+  if (!ui.openId || !draggingFiles(e)) return;
+  e.preventDefault();
+  e.dataTransfer.dropEffect = "copy";
+  setDropHint(true);
+}));
+drawerEl.addEventListener("dragleave", e => {
+  // Ignore the leave events fired when moving between the drawer's own children; only clear the
+  // hint when the pointer actually leaves the drawer (relatedTarget outside it, or null).
+  if (e.relatedTarget && drawerEl.contains(e.relatedTarget)) return;
+  setDropHint(false);
+});
+drawerEl.addEventListener("drop", e => {
+  if (!ui.openId || !draggingFiles(e)) return;
+  e.preventDefault();
+  setDropHint(false);
+  const t = currentTodo();
+  if (t) addImagesToTodo(t, e.dataTransfer.files);
+});
+
+// Paste a screenshot (Cmd/Ctrl+V) while the todo drawer is open. Acts only when the clipboard
+// carries image files, so pasting text into Title/Notes still works normally and attaches nothing.
+document.addEventListener("paste", e => {
+  if (!ui.openId) return;
+  const items = e.clipboardData && e.clipboardData.items;
+  if (!items) return;
+  const files = [];
+  for (const it of items) {
+    if (it.kind === "file" && (it.type === "image/jpeg" || it.type === "image/png")) {
+      const f = it.getAsFile();
+      if (f) files.push(f);
+    }
+  }
+  if (!files.length) return;   // plain-text paste — leave the focused input alone
+  e.preventDefault();
+  const t = currentTodo();
+  if (t) addImagesToTodo(t, files);
+});
+document.addEventListener("keydown", e => {
+  if (e.key !== "Escape") return;
+  // The full-size photo overlay is the top-most layer — Esc dismisses it first, leaving the
+  // drawer open so the owner returns to where they were.
+  if (imgLightboxEl) { closeImageLightbox(); return; }
+  closePop(); closeDrawer(); closeNavSheet(); closeSyncModal();
+});
 
 // Reflect the initial ui state on the toolbar controls (e.g. Group defaults to Project).
 $("#sortSel").value = ui.sort;
